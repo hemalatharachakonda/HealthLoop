@@ -1,0 +1,256 @@
+"""
+HealthLoop backend - FastAPI
+Run with: uvicorn main:app --reload --port 8000
+Then open frontend/index.html in a browser (or serve it - see README).
+
+Database: uses SQLAlchemy, so it works with SQLite (default, zero setup),
+PostgreSQL, or MySQL - just set DATABASE_URL in backend/.env. See database.py.
+"""
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from pathlib import Path
+import json
+import requests
+
+from database import init_db, get_db, User, Report, Reminder, MentalHealthSession
+from ocr import extract_text_from_image
+from groq_client import (
+    analyze_report,
+    extract_medicines,
+    symptom_triage_question,
+    mental_health_reply,
+)
+from hospital_finder import find_hospitals
+
+app = FastAPI(title="HealthLoop API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # fine for a hackathon demo; restrict in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+init_db()
+
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+if FRONTEND_DIR.exists():
+    app.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+
+# ---------- Users (minimal, no auth - hackathon scope) ----------
+
+class UserIn(BaseModel):
+    name: str
+    age: int | None = None
+    language: str = "English"
+
+
+@app.post("/api/users")
+def create_user(user: UserIn, db: Session = Depends(get_db)):
+    db_user = User(name=user.name, age=user.age, language=user.language)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return {"user_id": db_user.id}
+
+
+@app.get("/api/users/{user_id}")
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    return {"id": user.id, "name": user.name, "age": user.age, "language": user.language}
+
+
+# ---------- Module 1: Report upload + analysis ----------
+
+@app.post("/api/reports/analyze")
+async def analyze_report_endpoint(
+    file: UploadFile = File(...),
+    language: str = Form("English"),
+    user_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    image_bytes = await file.read()
+    raw_text = extract_text_from_image(image_bytes)
+
+    if not raw_text or len(raw_text.strip()) < 10:
+        raise HTTPException(
+            400,
+            "Could not read enough text from this image. Please retake the photo with better lighting.",
+        )
+
+    analysis = analyze_report(raw_text, language=language)
+    medicines = extract_medicines(raw_text)
+
+    db_report = Report(
+        user_id=user_id,
+        raw_text=raw_text,
+        primary_finding=json.dumps(analysis.get("primary_finding", {})),
+        other_findings=json.dumps(analysis.get("other_findings", [])),
+        diet_tips=json.dumps(analysis.get("primary_finding", {}).get("diet_tips", [])),
+        language=language,
+    )
+    db.add(db_report)
+
+    # auto-create reminders from any detected medicines
+    for med in medicines:
+        db.add(Reminder(
+            user_id=user_id,
+            medicine_name=med.get("medicine_name", ""),
+            dosage=med.get("dosage", ""),
+            frequency=med.get("frequency", ""),
+        ))
+
+    db.commit()
+    db.refresh(db_report)
+
+    return {
+        "report_id": db_report.id,
+        "analysis": analysis,
+        "medicines_detected": medicines,
+        "raw_text_preview": raw_text[:300],
+    }
+
+
+@app.get("/api/reports")
+def list_reports(user_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(Report)
+    if user_id:
+        query = query.filter(Report.user_id == user_id)
+    reports = query.order_by(Report.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "user_id": r.user_id,
+            "primary_finding": r.primary_finding,
+            "other_findings": r.other_findings,
+            "diet_tips": r.diet_tips,
+            "language": r.language,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in reports
+    ]
+
+
+# ---------- Module 2: Reminders ----------
+
+@app.get("/api/reminders")
+def list_reminders(user_id: int | None = None, db: Session = Depends(get_db)):
+    query = db.query(Reminder)
+    if user_id:
+        query = query.filter(Reminder.user_id == user_id)
+    reminders = query.order_by(Reminder.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "medicine_name": r.medicine_name,
+            "dosage": r.dosage,
+            "frequency": r.frequency,
+            "taken": r.taken,
+        }
+        for r in reminders
+    ]
+
+
+@app.post("/api/reminders/{reminder_id}/taken")
+def mark_taken(reminder_id: int, db: Session = Depends(get_db)):
+    reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+    if not reminder:
+        raise HTTPException(404, "Reminder not found")
+    reminder.taken = True
+    db.commit()
+    return {"status": "ok"}
+
+
+class ReminderIn(BaseModel):
+    user_id: int | None = None
+    medicine_name: str
+    dosage: str = ""
+    frequency: str = ""
+
+
+@app.post("/api/reminders")
+def create_reminder(reminder: ReminderIn, db: Session = Depends(get_db)):
+    db_reminder = Reminder(
+        user_id=reminder.user_id,
+        medicine_name=reminder.medicine_name,
+        dosage=reminder.dosage,
+        frequency=reminder.frequency,
+    )
+    db.add(db_reminder)
+    db.commit()
+    db.refresh(db_reminder)
+    return {"reminder_id": db_reminder.id}
+
+
+# ---------- Module 5: Symptom triage (adaptive interview) ----------
+
+class TriageIn(BaseModel):
+    conversation_history: list  # [{"role": "user"/"assistant", "content": "..."}]
+    language: str = "English"
+
+
+@app.post("/api/triage/next")
+def triage_next(payload: TriageIn):
+    result = symptom_triage_question(payload.conversation_history, language=payload.language)
+    return result
+
+
+class HospitalSearchIn(BaseModel):
+    lat: float
+    lon: float
+    is_emergency: bool = False
+    radius_m: int = 5000
+
+
+@app.post("/api/hospitals/nearby")
+def hospitals_nearby(payload: HospitalSearchIn):
+    """
+    Called after triage/next returns done=true. Pass is_emergency based on whether
+    recommended_specialty came back as "Emergency / ER" (see groq_client.symptom_triage_question).
+    """
+    try:
+        results = find_hospitals(
+            lat=payload.lat,
+            lon=payload.lon,
+            is_emergency=payload.is_emergency,
+            radius_m=payload.radius_m,
+        )
+    except requests.exceptions.RequestException:
+        raise HTTPException(503, "Could not reach hospital lookup service. Please try again.")
+    return {"hospitals": results, "mode": "emergency" if payload.is_emergency else "routine"}
+
+
+# ---------- Module 3: Mental health check-in ----------
+
+class MentalHealthIn(BaseModel):
+    conversation_history: list
+    language: str = "English"
+    user_id: int | None = None
+
+
+@app.post("/api/mental-health/reply")
+def mental_health_endpoint(payload: MentalHealthIn, db: Session = Depends(get_db)):
+    result = mental_health_reply(payload.conversation_history, language=payload.language)
+
+    last_msg = payload.conversation_history[-1]["content"] if payload.conversation_history else ""
+    db.add(MentalHealthSession(user_id=payload.user_id, message=last_msg, role="user", risk_flag=False))
+    db.add(MentalHealthSession(
+        user_id=payload.user_id,
+        message=result["reply"],
+        role="assistant",
+        risk_flag=bool(result.get("risk_flag", False)),
+    ))
+    db.commit()
+
+    return result
+
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}

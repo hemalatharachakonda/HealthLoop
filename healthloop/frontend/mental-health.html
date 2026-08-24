@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Talk - HealthLoop</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar"><h1>💬 Talk / Check-in</h1></header>
+
+  <main>
+    <div id="crisis-alert" class="crisis-box" style="display:none;">
+      <h3>⚠️ You're not alone</h3>
+      <p>It sounds like things might be really hard right now. Please reach out for support:</p>
+      <p><b>Tele-MANAS (India, 24/7): 14416</b></p>
+      <p>Would you like us to notify a trusted contact or counselor?</p>
+      <button onclick="consentToNotify(true)">Yes, please notify someone</button>
+      <button class="secondary" onclick="consentToNotify(false)">Not right now</button>
+    </div>
+
+    <div class="card" style="margin-bottom:10px;">
+      <p style="font-size:13px; color:var(--muted);">This is a supportive listening space, not a replacement for professional care.</p>
+    </div>
+
+    <div class="chat-window" id="chat-window"></div>
+
+    <div id="input-area" class="card">
+      <input id="msg-input" placeholder="Share how you're feeling..." onkeypress="if(event.key==='Enter') sendMessage()" />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="index.html">🏠<span>Home</span></a>
+    <a href="upload.html">📷<span>Reports</span></a>
+    <a href="reminders.html">💊<span>Meds</span></a>
+    <a href="mental-health.html" class="active">💬<span>Talk</span></a>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+<script>
+let history = [];
+
+function addBubble(role, text) {
+  const win = document.getElementById("chat-window");
+  const bubble = document.createElement("div");
+  bubble.className = `chat-bubble ${role}`;
+  bubble.textContent = text;
+  win.appendChild(bubble);
+  win.scrollTop = win.scrollHeight;
+}
+
+addBubble("assistant", "Hi, I'm here to listen. How has your week been?");
+
+async function sendMessage() {
+  const input = document.getElementById("msg-input");
+  const text = input.value.trim();
+  if (!text) return;
+  addBubble("user", text);
+  history.push({ role: "user", content: text });
+  input.value = "";
+  input.disabled = true;
+
+  try {
+    const result = await apiPost("/mental-health/reply", {
+      conversation_history: history,
+      language: getUserLanguage(),
+      user_id: getUserId() ? parseInt(getUserId()) : null,
+    });
+
+    addBubble("assistant", result.reply);
+    history.push({ role: "assistant", content: result.reply });
+
+    if (result.risk_flag) {
+      document.getElementById("crisis-alert").style.display = "block";
+      document.getElementById("crisis-alert").scrollIntoView({ behavior: "smooth" });
+    }
+  } catch (e) {
+    addBubble("assistant", "Sorry, something went wrong: " + e.message);
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+function consentToNotify(consented) {
+  document.getElementById("crisis-alert").style.display = "none";
+  if (consented) {
+    // Hackathon scope: in a real build this would trigger a backend call
+    // to notify a registered trusted contact / counselor.
+    alert("A counselor/trusted contact would be notified here (backend hook to wire up).");
+  }
+  addBubble("assistant", "I'm here whenever you want to keep talking.");
+}
+</script>
+</body>
+</html>

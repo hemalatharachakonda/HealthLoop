@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HealthLoop</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <h1>🩺 HealthLoop</h1>
+    <span id="user-badge" style="font-size:12px;"></span>
+  </header>
+
+  <main>
+    <div id="onboarding" class="card" style="display:none;">
+      <h3>Welcome 👋</h3>
+      <p>Let's set up your profile first.</p>
+      <input id="name-input" placeholder="Your name" />
+      <input id="age-input" placeholder="Age" type="number" />
+      <select id="lang-input">
+        <option value="English">English</option>
+        <option value="Hindi">Hindi</option>
+        <option value="Telugu">Telugu</option>
+        <option value="Tamil">Tamil</option>
+        <option value="Kannada">Kannada</option>
+        <option value="Bengali">Bengali</option>
+      </select>
+      <button onclick="createUser()">Get Started</button>
+    </div>
+
+    <div id="main-dashboard" style="display:none;">
+      <div class="card">
+        <h3>Next medicine</h3>
+        <p id="next-medicine">No reminders yet — upload a prescription to get started.</p>
+      </div>
+
+      <div class="card">
+        <h3>Latest report</h3>
+        <p id="latest-report">No reports uploaded yet.</p>
+      </div>
+
+      <div class="tile-grid">
+        <a class="tile" href="upload.html">
+          <span class="icon">📷</span>
+          <span class="label">Upload Report</span>
+        </a>
+        <a class="tile" href="reminders.html">
+          <span class="icon">💊</span>
+          <span class="label">Medicine Reminders</span>
+        </a>
+        <a class="tile" href="triage.html">
+          <span class="icon">🩹</span>
+          <span class="label">Not Feeling Well?</span>
+        </a>
+        <a class="tile" href="mental-health.html">
+          <span class="icon">💬</span>
+          <span class="label">Talk / Check-in</span>
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="index.html" class="active">🏠<span>Home</span></a>
+    <a href="upload.html">📷<span>Reports</span></a>
+    <a href="reminders.html">💊<span>Meds</span></a>
+    <a href="mental-health.html">💬<span>Talk</span></a>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+<script>
+async function createUser() {
+  const name = document.getElementById("name-input").value.trim();
+  const age = document.getElementById("age-input").value;
+  const language = document.getElementById("lang-input").value;
+  if (!name) return alert("Please enter your name");
+
+  try {
+    const result = await apiPost("/users", { name, age: age ? parseInt(age) : null, language });
+    setUser(result.user_id, language);
+    loadDashboard();
+  } catch (e) {
+    alert("Could not create profile: " + e.message);
+  }
+}
+
+async function loadDashboard() {
+  const userId = getUserId();
+  if (!userId) {
+    document.getElementById("onboarding").style.display = "block";
+    return;
+  }
+  document.getElementById("main-dashboard").style.display = "block";
+  document.getElementById("user-badge").textContent = getUserLanguage();
+
+  try {
+    const reminders = await apiGet(`/reminders?user_id=${userId}`);
+    const pending = reminders.filter(r => !r.taken);
+    document.getElementById("next-medicine").textContent = pending.length
+      ? `${pending[0].medicine_name} — ${pending[0].dosage} (${pending[0].frequency})`
+      : "No pending reminders. All caught up!";
+  } catch (e) { /* backend may not be running yet */ }
+
+  try {
+    const reports = await apiGet(`/reports?user_id=${userId}`);
+    if (reports.length) {
+      const primary = JSON.parse(reports[0].primary_finding || "{}");
+      document.getElementById("latest-report").textContent = primary.summary || "Report processed.";
+    }
+  } catch (e) { /* backend may not be running yet */ }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

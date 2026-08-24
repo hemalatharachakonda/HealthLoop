@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Upload Report - HealthLoop</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <h1>📷 Upload Report</h1>
+  </header>
+
+  <main>
+    <div class="card">
+      <p>Take a photo of your medical report or prescription. We'll explain it in <b id="lang-label"></b>.</p>
+      <div class="upload-drop" onclick="document.getElementById('file-input').click()">
+        <div id="drop-label">📁 Tap to choose or take a photo</div>
+        <img id="preview" style="max-width:100%; border-radius:10px; margin-top:10px; display:none;" />
+      </div>
+      <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none;" onchange="onFileChosen(event)" />
+      <button id="analyze-btn" onclick="analyzeReport()" disabled>Analyze Report</button>
+    </div>
+
+    <div id="loading" class="card" style="display:none;">
+      <p class="loading">🔎 Reading your report and analyzing it... this can take a few seconds.</p>
+    </div>
+
+    <div id="results" style="display:none;">
+      <div class="card">
+        <h3>Your Main Result <span class="badge blue">Primary</span></h3>
+        <p id="primary-summary"></p>
+        <button class="listen" onclick="speak(document.getElementById('primary-summary').textContent, getUserLanguage())">🔊 Listen</button>
+        <h4 style="font-size:13px; margin-top:12px;">Diet & Lifestyle Tips</h4>
+        <ul id="primary-tips" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+      </div>
+
+      <div id="other-findings-card" class="card" style="display:none;">
+        <h3>We Also Noticed <span class="badge orange">Extra</span></h3>
+        <div id="other-findings-list"></div>
+      </div>
+
+      <div id="medicines-card" class="card" style="display:none;">
+        <h3>💊 Medicines Detected</h3>
+        <p style="font-size:13px;">We've automatically added these to your reminders.</p>
+        <div id="medicines-list"></div>
+      </div>
+
+      <div class="card">
+        <p style="font-size:12px; color:var(--muted);" id="disclaimer-text"></p>
+      </div>
+
+      <a href="index.html" class="btn" style="text-align:center; display:block;">Back to Dashboard</a>
+    </div>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="index.html">🏠<span>Home</span></a>
+    <a href="upload.html" class="active">📷<span>Reports</span></a>
+    <a href="reminders.html">💊<span>Meds</span></a>
+    <a href="mental-health.html">💬<span>Talk</span></a>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+<script>
+document.getElementById("lang-label").textContent = getUserLanguage();
+let chosenFile = null;
+
+function onFileChosen(event) {
+  chosenFile = event.target.files[0];
+  if (!chosenFile) return;
+  const preview = document.getElementById("preview");
+  preview.src = URL.createObjectURL(chosenFile);
+  preview.style.display = "block";
+  document.getElementById("drop-label").textContent = "✅ Photo selected — tap to change";
+  document.getElementById("analyze-btn").disabled = false;
+}
+
+async function analyzeReport() {
+  if (!chosenFile) return;
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("results").style.display = "none";
+
+  const formData = new FormData();
+  formData.append("file", chosenFile);
+  formData.append("language", getUserLanguage());
+  if (getUserId()) formData.append("user_id", getUserId());
+
+  try {
+    const result = await apiPost("/reports/analyze", formData, true);
+    renderResults(result);
+  } catch (e) {
+    alert("Could not analyze report: " + e.message);
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+function renderResults(result) {
+  const analysis = result.analysis;
+  document.getElementById("results").style.display = "block";
+
+  document.getElementById("primary-summary").textContent = analysis.primary_finding?.summary || "";
+  const tipsList = document.getElementById("primary-tips");
+  tipsList.innerHTML = "";
+  (analysis.primary_finding?.diet_tips || []).forEach(tip => {
+    const li = document.createElement("li");
+    li.textContent = tip;
+    tipsList.appendChild(li);
+  });
+
+  const otherFindings = analysis.other_findings || [];
+  if (otherFindings.length) {
+    document.getElementById("other-findings-card").style.display = "block";
+    const container = document.getElementById("other-findings-list");
+    container.innerHTML = "";
+    otherFindings.forEach(f => {
+      const div = document.createElement("div");
+      div.style.marginBottom = "12px";
+      div.innerHTML = `
+        <b style="font-size:14px;">${f.value_name}</b>
+        <p style="font-size:13px; color:var(--muted); margin:4px 0;">${f.summary}</p>
+        <p style="font-size:13px;">🥗 ${(f.food_suggestions || []).join(", ")}</p>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  const medicines = result.medicines_detected || [];
+  if (medicines.length) {
+    document.getElementById("medicines-card").style.display = "block";
+    const container = document.getElementById("medicines-list");
+    container.innerHTML = "";
+    medicines.forEach(m => {
+      const div = document.createElement("div");
+      div.style.fontSize = "13px";
+      div.style.marginBottom = "6px";
+      div.textContent = `${m.medicine_name} — ${m.dosage} (${m.frequency})`;
+      container.appendChild(div);
+    });
+  }
+
+  document.getElementById("disclaimer-text").textContent = analysis.disclaimer || "Please consult a doctor for medical decisions.";
+}
+</script>
+</body>
+</html>
