@@ -10,3 +10,4 @@ psycopg2-binary
 pymysql
 bcrypt
 pypdf
+pdf2image

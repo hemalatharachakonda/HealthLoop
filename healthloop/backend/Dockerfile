@@ -1,10 +1,14 @@
-# Hugging Face Spaces (Docker SDK) deployment for HealthLoop backend
+# Render (Docker runtime) deployment for HealthLoop backend
 
 FROM python:3.11-slim
 
-# Install Tesseract OCR (system dependency, needed for report photo reading)
+# pytesseract needs the tesseract-ocr binary; pdf2image needs poppler-utils.
+# Neither is installable via pip - Render's plain "Python" runtime only ever runs
+# `pip install`, it never apt-installs system packages. That's why OCR/PDF reading
+# fails until this service's Environment is switched to Docker in Render's settings.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,7 +18,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Hugging Face Spaces (Docker SDK) expects the app to listen on port 7860
-EXPOSE 7860
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Render assigns the port dynamically via $PORT - do NOT hardcode a port here.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
