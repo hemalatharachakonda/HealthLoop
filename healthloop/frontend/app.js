@@ -1,5 +1,5 @@
 // ---- Config ----
-const API_BASE = "https://healthloop-backend.onrender.com";
+const API_BASE = "https://healthloop-backend.onrender.com/api";
 
 // ---- Simple "logged in user" handling (hackathon scope: no real auth) ----
 function getUserId() {
