@@ -12,6 +12,11 @@ function setUser(userId, language) {
   localStorage.setItem("healthloop_user_id", userId);
   localStorage.setItem("healthloop_language", language);
 }
+function logout() {
+  localStorage.removeItem("healthloop_user_id");
+  localStorage.removeItem("healthloop_language");
+  window.location.href = "index.html";
+}
 
 // Language code map: display name -> BCP-47 code for browser TTS
 const LANG_CODES = {

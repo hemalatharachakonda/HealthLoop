@@ -27,14 +27,14 @@ body {
 }
 
 .app-shell {
-  max-width: 820px;
+  max-width: 100%;
   width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   background: var(--bg);
   display: flex;
   flex-direction: row;
-  box-shadow: 0 0 40px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 
 .content-area {
@@ -44,10 +44,16 @@ body {
   flex-direction: column;
 }
 
+/* Login/signup screen only: small centered card, no sidebar */
+body.auth-mode .app-shell {
+  max-width: 480px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.08);
+}
+
 @media (min-width: 540px) {
   body { padding: 24px 0; }
-  .app-shell {
-    min-height: calc(100vh - 48px);
+  body.auth-mode .app-shell {
+    min-height: auto;
     border-radius: 24px;
     overflow: hidden;
   }

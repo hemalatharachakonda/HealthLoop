@@ -169,20 +169,16 @@ async function doSignup() {
   }
 }
 
-function logout() {
-  localStorage.removeItem("healthloop_user_id");
-  localStorage.removeItem("healthloop_language");
-  location.reload();
-}
-
 async function loadDashboard() {
   const userId = getUserId();
   if (!userId) {
+    document.body.classList.add("auth-mode");
     document.getElementById("auth-area").style.display = "block";
     document.getElementById("main-dashboard").style.display = "none";
     document.getElementById("side-nav").style.display = "none";
     return;
   }
+  document.body.classList.remove("auth-mode");
   document.getElementById("auth-area").style.display = "none";
   document.getElementById("main-dashboard").style.display = "block";
   document.getElementById("side-nav").style.display = "flex";

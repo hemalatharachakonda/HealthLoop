@@ -16,7 +16,7 @@ import json
 import requests
 
 from database import init_db, get_db, User, Report, Reminder, MentalHealthSession
-from ocr import extract_text_from_image
+from ocr import extract_text_from_file
 from auth import hash_password, verify_password
 from groq_client import (
     analyze_report,
@@ -153,18 +153,38 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/reports/analyze")
 async def analyze_report_endpoint(
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     language: str = Form("English"),
     user_id: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    image_bytes = await file.read()
-    raw_text = extract_text_from_image(image_bytes)
+    """
+    Accepts one or more files (multiple photos of the same report, or a single PDF).
+    Text from all files is combined before analysis, since a report can span multiple
+    pages/photos - Groq sees the whole thing at once rather than one page in isolation.
+    """
+    combined_text_parts = []
+    failed_files = []
+
+    for f in files:
+        file_bytes = await f.read()
+        try:
+            extracted = extract_text_from_file(file_bytes, f.content_type)
+        except Exception:
+            extracted = ""
+        if extracted and len(extracted.strip()) >= 5:
+            combined_text_parts.append(extracted)
+        else:
+            failed_files.append(f.filename or "unnamed file")
+
+    raw_text = "\n\n---\n\n".join(combined_text_parts)
 
     if not raw_text or len(raw_text.strip()) < 10:
         raise HTTPException(
             400,
-            "Could not read enough text from this image. Please retake the photo with better lighting.",
+            "Could not read enough text from the uploaded file(s). "
+            "For photos, please retake with better lighting. "
+            "For PDFs, make sure it's a text-based PDF, not a scanned image with no text layer.",
         )
 
     analysis = analyze_report(raw_text, language=language)
@@ -197,6 +217,8 @@ async def analyze_report_endpoint(
         "analysis": analysis,
         "medicines_detected": medicines,
         "raw_text_preview": raw_text[:300],
+        "files_processed": len(combined_text_parts),
+        "files_failed": failed_files,
     }
 
 

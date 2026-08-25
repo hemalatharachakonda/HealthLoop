@@ -15,6 +15,8 @@
     <a href="reminders.html"><span class="icon">💊</span><span>Meds</span></a>
     <a href="triage.html"><span class="icon">🩹</span><span>Care</span></a>
     <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
+    <a href="my-data.html"><span class="icon">🔒</span><span>My Data</span></a>
+    <a href="#" onclick="logout(); return false;"><span class="icon">🚪</span><span>Log Out</span></a>
   </nav>
 
   <div class="content-area">
@@ -24,12 +26,12 @@
 
   <main>
     <div class="card">
-      <p>Take a photo of your medical report or prescription. We'll explain it in <b id="lang-label"></b>.</p>
+      <p>Take photos of your medical report or prescription, or upload a PDF. You can add multiple pages. We'll explain it in <b id="lang-label"></b>.</p>
       <div class="upload-drop" onclick="document.getElementById('file-input').click()">
-        <div id="drop-label">📁 Tap to choose or take a photo</div>
-        <img id="preview" style="max-width:100%; border-radius:10px; margin-top:10px; display:none;" />
+        <div id="drop-label">📁 Tap to choose photos or a PDF (multiple allowed)</div>
+        <div id="preview-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
       </div>
-      <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none;" onchange="onFileChosen(event)" />
+      <input type="file" id="file-input" accept="image/*,application/pdf" multiple style="display:none;" onchange="onFilesChosen(event)" />
       <button id="analyze-btn" onclick="analyzeReport()" disabled>Analyze Report</button>
     </div>
 
@@ -71,30 +73,48 @@
 <script src="app.js"></script>
 <script>
 document.getElementById("lang-label").textContent = getUserLanguage();
-let chosenFile = null;
+let chosenFiles = [];
 
-function onFileChosen(event) {
-  chosenFile = event.target.files[0];
-  if (!chosenFile) return;
-  const preview = document.getElementById("preview");
-  preview.src = URL.createObjectURL(chosenFile);
-  preview.style.display = "block";
-  document.getElementById("drop-label").textContent = "✅ Photo selected — tap to change";
+function onFilesChosen(event) {
+  chosenFiles = Array.from(event.target.files);
+  if (!chosenFiles.length) return;
+
+  const previewList = document.getElementById("preview-list");
+  previewList.innerHTML = "";
+
+  chosenFiles.forEach(f => {
+    if (f.type === "application/pdf") {
+      const chip = document.createElement("div");
+      chip.style.cssText = "background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12px;";
+      chip.textContent = "📄 " + f.name;
+      previewList.appendChild(chip);
+    } else {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(f);
+      img.style.cssText = "width:70px; height:70px; object-fit:cover; border-radius:10px;";
+      previewList.appendChild(img);
+    }
+  });
+
+  document.getElementById("drop-label").textContent = `✅ ${chosenFiles.length} file(s) selected — tap to change`;
   document.getElementById("analyze-btn").disabled = false;
 }
 
 async function analyzeReport() {
-  if (!chosenFile) return;
+  if (!chosenFiles.length) return;
   document.getElementById("loading").style.display = "block";
   document.getElementById("results").style.display = "none";
 
   const formData = new FormData();
-  formData.append("file", chosenFile);
+  chosenFiles.forEach(f => formData.append("files", f));
   formData.append("language", getUserLanguage());
   if (getUserId()) formData.append("user_id", getUserId());
 
   try {
     const result = await apiPost("/reports/analyze", formData, true);
+    if (result.files_failed && result.files_failed.length) {
+      alert(`Note: couldn't read ${result.files_failed.length} file(s): ${result.files_failed.join(", ")}. The rest were analyzed successfully.`);
+    }
     renderResults(result);
   } catch (e) {
     alert("Could not analyze report: " + e.message);
