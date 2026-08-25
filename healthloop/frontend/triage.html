@@ -13,6 +13,16 @@
 </head>
 <body>
 <div class="app-shell">
+  <nav class="side-nav">
+    <div class="brand">🩺</div>
+    <a href="index.html"><span class="icon">🏠</span><span>Home</span></a>
+    <a href="upload.html"><span class="icon">📷</span><span>Reports</span></a>
+    <a href="reminders.html"><span class="icon">💊</span><span>Meds</span></a>
+    <a href="triage.html" class="active"><span class="icon">🩹</span><span>Care</span></a>
+    <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
+  </nav>
+
+  <div class="content-area">
   <header class="topbar"><h1>🩹 Not Feeling Well?</h1></header>
 
   <main>
@@ -42,13 +52,8 @@
     <div id="hospital-map" style="display:none;"></div>
     <div id="hospitals-area" style="display:none;"></div>
   </main>
+  </div>
 
-  <nav class="bottom-nav">
-    <a href="index.html">🏠<span>Home</span></a>
-    <a href="upload.html">📷<span>Reports</span></a>
-    <a href="reminders.html">💊<span>Meds</span></a>
-    <a href="mental-health.html">💬<span>Talk</span></a>
-  </nav>
 </div>
 
 <script src="app.js"></script>
