@@ -17,6 +17,7 @@ import requests
 
 from database import init_db, get_db, User, Report, Reminder, MentalHealthSession
 from ocr import extract_text_from_image
+from auth import hash_password, verify_password
 from groq_client import (
     analyze_report,
     extract_medicines,
@@ -41,21 +42,99 @@ if FRONTEND_DIR.exists():
     app.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 
-# ---------- Users (minimal, no auth - hackathon scope) ----------
+# ---------- Auth: signup / login (email + password) ----------
+# Note: hackathon scope - returns user_id directly instead of a full JWT session token.
+# Good enough for a demo; for a real deployment, swap this for proper session/JWT tokens.
 
-class UserIn(BaseModel):
+class SignupIn(BaseModel):
     name: str
+    email: str
+    password: str
+    phone: str | None = None
+    parent_phone: str | None = None
     age: int | None = None
     language: str = "English"
 
 
-@app.post("/api/users")
-def create_user(user: UserIn, db: Session = Depends(get_db)):
-    db_user = User(name=user.name, age=user.age, language=user.language)
+@app.post("/api/auth/signup")
+def signup(payload: SignupIn, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == payload.email).first()
+    if existing:
+        raise HTTPException(400, "An account with this email already exists.")
+
+    db_user = User(
+        name=payload.name,
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        phone=payload.phone,
+        parent_phone=payload.parent_phone,
+        age=payload.age,
+        language=payload.language,
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"user_id": db_user.id}
+    return {"user_id": db_user.id, "name": db_user.name, "language": db_user.language}
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/login")
+def login(payload: LoginIn, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(401, "Incorrect email or password.")
+    return {"user_id": user.id, "name": user.name, "language": user.language}
+
+
+# ---------- View own profile + data (used by a "My Data" screen) ----------
+
+@app.get("/api/users/{user_id}/full-data")
+def get_user_full_data(user_id: int, db: Session = Depends(get_db)):
+    """Returns the user's profile plus their reports and reminders - lets them see
+    everything stored about them in one place (transparency, and useful for a demo)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    reports = db.query(Report).filter(Report.user_id == user_id).order_by(Report.created_at.desc()).all()
+    reminders = db.query(Reminder).filter(Reminder.user_id == user_id).order_by(Reminder.created_at.desc()).all()
+
+    return {
+        "profile": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "phone": user.phone,
+            "parent_phone": user.parent_phone,
+            "age": user.age,
+            "language": user.language,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        "reports": [
+            {
+                "id": r.id,
+                "primary_finding": r.primary_finding,
+                "other_findings": r.other_findings,
+                "language": r.language,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in reports
+        ],
+        "reminders": [
+            {
+                "id": r.id,
+                "medicine_name": r.medicine_name,
+                "dosage": r.dosage,
+                "frequency": r.frequency,
+                "taken": r.taken,
+            }
+            for r in reminders
+        ],
+    }
 
 
 @app.get("/api/users/{user_id}")
@@ -63,7 +142,11 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    return {"id": user.id, "name": user.name, "age": user.age, "language": user.language}
+    return {
+        "id": user.id, "name": user.name, "email": user.email,
+        "phone": user.phone, "parent_phone": user.parent_phone,
+        "age": user.age, "language": user.language,
+    }
 
 
 # ---------- Module 1: Report upload + analysis ----------

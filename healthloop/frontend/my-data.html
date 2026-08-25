@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Data - HealthLoop</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar"><h1>🔒 My Data</h1></header>
+
+  <main>
+    <div class="card">
+      <p style="font-size:13px; color:var(--muted);">This is everything HealthLoop stores about you. Nothing here is hidden from you.</p>
+    </div>
+
+    <div id="profile-card" class="card"></div>
+
+    <h3 style="font-size:14px; margin:16px 0 8px;">Reports</h3>
+    <div id="reports-list"></div>
+
+    <h3 style="font-size:14px; margin:16px 0 8px;">Reminders</h3>
+    <div id="reminders-list"></div>
+
+    <a href="index.html" class="btn" style="display:block; text-align:center; margin-top:16px;">Back to Dashboard</a>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="index.html">🏠<span>Home</span></a>
+    <a href="upload.html">📷<span>Reports</span></a>
+    <a href="reminders.html">💊<span>Meds</span></a>
+    <a href="mental-health.html">💬<span>Talk</span></a>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+<script>
+async function loadMyData() {
+  const userId = getUserId();
+  if (!userId) {
+    document.getElementById("profile-card").innerHTML = "<p>Please log in first.</p>";
+    return;
+  }
+
+  try {
+    const data = await apiGet(`/users/${userId}/full-data`);
+
+    document.getElementById("profile-card").innerHTML = `
+      <h3>Profile</h3>
+      <p><b>Name:</b> ${data.profile.name}</p>
+      <p><b>Email:</b> ${data.profile.email}</p>
+      <p><b>Phone:</b> ${data.profile.phone || "Not provided"}</p>
+      <p><b>Parent/Guardian phone:</b> ${data.profile.parent_phone || "Not provided"}</p>
+      <p><b>Age:</b> ${data.profile.age || "Not provided"}</p>
+      <p><b>Language:</b> ${data.profile.language}</p>
+      <p><b>Account created:</b> ${data.profile.created_at ? new Date(data.profile.created_at).toLocaleDateString() : "-"}</p>
+    `;
+
+    const reportsContainer = document.getElementById("reports-list");
+    if (!data.reports.length) {
+      reportsContainer.innerHTML = `<div class="card"><p>No reports uploaded yet.</p></div>`;
+    } else {
+      reportsContainer.innerHTML = "";
+      data.reports.forEach(r => {
+        const primary = JSON.parse(r.primary_finding || "{}");
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <p style="font-size:13px; color:var(--muted);">${new Date(r.created_at).toLocaleDateString()}</p>
+          <p>${primary.summary || "Report processed."}</p>
+        `;
+        reportsContainer.appendChild(card);
+      });
+    }
+
+    const remindersContainer = document.getElementById("reminders-list");
+    if (!data.reminders.length) {
+      remindersContainer.innerHTML = `<div class="card"><p>No reminders set yet.</p></div>`;
+    } else {
+      remindersContainer.innerHTML = "";
+      data.reminders.forEach(r => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<p>${r.medicine_name} — ${r.dosage} (${r.frequency}) ${r.taken ? '<span class="badge green">Taken</span>' : '<span class="badge orange">Pending</span>'}</p>`;
+        remindersContainer.appendChild(card);
+      });
+    }
+  } catch (e) {
+    document.getElementById("profile-card").innerHTML = `<p>Could not load your data: ${e.message}</p>`;
+  }
+}
+
+loadMyData();
+</script>
+</body>
+</html>
