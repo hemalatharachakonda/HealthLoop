@@ -187,8 +187,14 @@ async def analyze_report_endpoint(
             "For PDFs, make sure it's a text-based PDF, not a scanned image with no text layer.",
         )
 
-    analysis = analyze_report(raw_text, language=language)
-    medicines = extract_medicines(raw_text)
+    try:
+        analysis = analyze_report(raw_text, language=language)
+        medicines = extract_medicines(raw_text)
+    except Exception as e:
+        # If Groq (or any part of the analysis call) fails, return a clean JSON error
+        # instead of letting an unhandled exception crash the request - an unhandled
+        # crash skips CORS headers entirely, which browsers misreport as a CORS error.
+        raise HTTPException(502, f"Report analysis failed: {e}")
 
     db_report = Report(
         user_id=user_id,
@@ -302,7 +308,10 @@ class TriageIn(BaseModel):
 
 @app.post("/api/triage/next")
 def triage_next(payload: TriageIn):
-    result = symptom_triage_question(payload.conversation_history, language=payload.language)
+    try:
+        result = symptom_triage_question(payload.conversation_history, language=payload.language)
+    except Exception as e:
+        raise HTTPException(502, f"Triage assistant failed: {e}")
     return result
 
 
@@ -311,6 +320,7 @@ class HospitalSearchIn(BaseModel):
     lon: float
     is_emergency: bool = False
     radius_m: int = 5000
+    specialty: str | None = None
 
 
 @app.post("/api/hospitals/nearby")
@@ -318,6 +328,8 @@ def hospitals_nearby(payload: HospitalSearchIn):
     """
     Called after triage/next returns done=true. Pass is_emergency based on whether
     recommended_specialty came back as "Emergency / ER" (see groq_client.symptom_triage_question).
+    `specialty` is Groq's recommended_specialty - used to prioritize hospitals confirmed to
+    offer that specialty (currently only for Vijayawada, see curated_hospitals.py).
     """
     try:
         results = find_hospitals(
@@ -325,6 +337,7 @@ def hospitals_nearby(payload: HospitalSearchIn):
             lon=payload.lon,
             is_emergency=payload.is_emergency,
             radius_m=payload.radius_m,
+            specialty=payload.specialty,
         )
     except requests.exceptions.RequestException:
         raise HTTPException(503, "Could not reach hospital lookup service. Please try again.")
@@ -341,7 +354,10 @@ class MentalHealthIn(BaseModel):
 
 @app.post("/api/mental-health/reply")
 def mental_health_endpoint(payload: MentalHealthIn, db: Session = Depends(get_db)):
-    result = mental_health_reply(payload.conversation_history, language=payload.language)
+    try:
+        result = mental_health_reply(payload.conversation_history, language=payload.language)
+    except Exception as e:
+        raise HTTPException(502, f"Mental health assistant failed: {e}")
 
     last_msg = payload.conversation_history[-1]["content"] if payload.conversation_history else ""
     db.add(MentalHealthSession(user_id=payload.user_id, message=last_msg, role="user", risk_flag=False))

@@ -62,6 +62,7 @@
 <script>
 let history = [];
 let isEmergency = false;
+let recommendedSpecialty = "";
 let leafletMap = null;
 let mapMarkers = [];
 
@@ -99,7 +100,8 @@ async function sendAnswer() {
       document.getElementById("result-area").style.display = "block";
       document.getElementById("specialty-text").textContent = result.recommended_specialty;
       document.getElementById("reasoning-text").textContent = result.reasoning;
-      isEmergency = (result.recommended_specialty || "").toLowerCase().includes("emergency");
+      recommendedSpecialty = result.recommended_specialty || "";
+      isEmergency = recommendedSpecialty.toLowerCase().includes("emergency");
       if (isEmergency) {
         addBubble("assistant", "⚠️ This sounds urgent. Please consider calling emergency services right away.");
       }
@@ -130,6 +132,7 @@ function findNearbyHospitals() {
         lon: position.coords.longitude,
         is_emergency: isEmergency,
         radius_m: 5000,
+        specialty: recommendedSpecialty,
       });
       renderHospitals(result);
     } catch (e) {
@@ -172,8 +175,12 @@ function renderHospitals(result) {
     card.className = "card";
     card.id = `hospital-card-${i}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lon}`;
+    const specialtyBadge = h.specialty_match
+      ? `<span class="badge blue">✓ Confirmed specialty match</span>`
+      : "";
     card.innerHTML = `
       <h3>${h.name} <span class="badge ${result.mode === 'emergency' ? 'orange' : 'green'}">${h.status}</span></h3>
+      ${specialtyBadge}
       <p>${h.phone ? "📞 " + h.phone : "Phone number not listed"}</p>
       <a class="btn" style="display:inline-block; text-decoration:none;" href="${mapsUrl}" target="_blank">Get Directions</a>
     `;
