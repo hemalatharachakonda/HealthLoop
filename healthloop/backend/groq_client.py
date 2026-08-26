@@ -34,19 +34,34 @@ def _call_groq(messages, temperature=0.4, force_json=False):
         payload["response_format"] = {"type": "json_object"}
 
     resp = requests.post(GROQ_URL, headers=headers, json=payload, timeout=30)
+
+    if resp.status_code == 429:
+        retry_after = resp.headers.get("retry-after")
+        wait_msg = f" Please wait about {retry_after} seconds and try again." if retry_after else " Please wait a minute and try again."
+        raise RuntimeError(
+            "Groq's free-tier rate limit was hit (this resets automatically each minute - "
+            "it's not an app bug)." + wait_msg
+        )
+
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
 
 def analyze_report(raw_text: str, language: str = "English"):
     """
-    Takes OCR'd report text -> returns structured analysis:
-    primary finding, other findings, diet/lifestyle tips - all in the target language.
+    Takes OCR'd report text -> returns structured analysis (primary finding, other findings,
+    diet/lifestyle tips) AND any medicines found - all in one Groq call.
+
+    Combined into a single call (previously two separate calls: analyze_report + extract_medicines)
+    specifically to reduce tokens-per-request - Groq's free tier caps tokens-per-minute, and sending
+    the full report text twice (once per call) was enough by itself to exceed that cap on a single
+    upload of a dense report, causing a 429 that no amount of waiting could fix (the request itself
+    was too big, not just badly timed). One call = one system prompt + one copy of the report text.
     """
     system_prompt = f"""You are a careful medical-report explainer for a health app used in India.
-Respond ONLY in {language}. Respond ONLY with valid JSON, no markdown, no preamble.
+Respond ONLY in {language} (except JSON keys, which stay in English). Respond ONLY with valid JSON, no markdown, no preamble.
 
-Given raw OCR text from a lab report, produce JSON with this exact shape:
+Given raw OCR text from a lab report or prescription, produce JSON with this exact shape:
 {{
   "primary_finding": {{
      "summary": "plain-language explanation of the main abnormal value, 2-3 short sentences, no jargon",
@@ -59,7 +74,10 @@ Given raw OCR text from a lab report, produce JSON with this exact shape:
        "food_suggestions": ["food 1", "food 2"]
      }}
   ],
-  "disclaimer": "a short one-line reminder to consult a doctor"
+  "disclaimer": "a short one-line reminder to consult a doctor",
+  "medicines": [
+     {{"medicine_name": "...", "dosage": "...", "frequency": "..."}}
+  ]
 }}
 
 Rules:
@@ -68,6 +86,7 @@ Rules:
 - Do not suggest medicine dosages or treatment changes - only diet/lifestyle/food suggestions.
 - If you cannot find clear abnormal values, say so honestly in primary_finding.summary.
 - "other_findings" can be an empty list if nothing else stands out.
+- "medicines" can be an empty list if no prescription/medicine info is present in the text.
 """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -75,30 +94,6 @@ Rules:
     ]
     content = _call_groq(messages, temperature=0.3, force_json=True)
     return json.loads(content)
-
-
-def extract_medicines(raw_text: str):
-    """Extracts structured medicine info from prescription text."""
-    system_prompt = """Extract medicines from this prescription text.
-Respond ONLY with valid JSON: a list of objects like
-[{"medicine_name": "...", "dosage": "...", "frequency": "..."}]
-If no medicines are found, return an empty list. No markdown, no preamble."""
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": raw_text},
-    ]
-    content = _call_groq(messages, temperature=0.1, force_json=False)
-    try:
-        # model may wrap in an object; handle both list and {"medicines": [...]}
-        parsed = json.loads(content)
-        if isinstance(parsed, dict):
-            for v in parsed.values():
-                if isinstance(v, list):
-                    return v
-            return []
-        return parsed
-    except json.JSONDecodeError:
-        return []
 
 
 def symptom_triage_question(conversation_history: list, language: str = "English"):

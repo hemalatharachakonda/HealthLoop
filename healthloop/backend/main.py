@@ -20,7 +20,6 @@ from ocr import extract_text_from_file
 from auth import hash_password, verify_password
 from groq_client import (
     analyze_report,
-    extract_medicines,
     symptom_triage_question,
     mental_health_reply,
 )
@@ -189,12 +188,13 @@ async def analyze_report_endpoint(
 
     try:
         analysis = analyze_report(raw_text, language=language)
-        medicines = extract_medicines(raw_text)
     except Exception as e:
         # If Groq (or any part of the analysis call) fails, return a clean JSON error
         # instead of letting an unhandled exception crash the request - an unhandled
         # crash skips CORS headers entirely, which browsers misreport as a CORS error.
         raise HTTPException(502, f"Report analysis failed: {e}")
+
+    medicines = analysis.get("medicines", [])
 
     db_report = Report(
         user_id=user_id,
