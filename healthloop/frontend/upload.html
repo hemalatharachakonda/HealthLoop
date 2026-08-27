@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Upload Report - HealthLoop</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="side-nav">
+    <div class="brand">🩺</div>
+    <a href="index.html"><span class="icon">🏠</span><span>Home</span></a>
+    <a href="upload.html" class="active"><span class="icon">📷</span><span>Reports</span></a>
+    <a href="reminders.html"><span class="icon">💊</span><span>Meds</span></a>
+    <a href="triage.html"><span class="icon">🩹</span><span>Care</span></a>
+    <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
+    <a href="my-data.html"><span class="icon">🔒</span><span>My Data</span></a>
+    <a href="#" onclick="logout(); return false;"><span class="icon">🚪</span><span>Log Out</span></a>
+  </nav>
+
+  <div class="content-area">
+  <header class="topbar">
+    <h1>📷 Upload Report</h1>
+  </header>
+
+  <main>
+    <div class="card">
+      <p>Take photos of your medical report or prescription, or upload a PDF. You can add multiple pages. We'll explain it in <b id="lang-label"></b>.</p>
+      <div class="upload-drop" onclick="document.getElementById('file-input').click()">
+        <div id="drop-label">📁 Tap to choose photos or a PDF (multiple allowed)</div>
+        <div id="preview-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
+      </div>
+      <input type="file" id="file-input" accept="image/*,application/pdf" multiple style="display:none;" onchange="onFilesChosen(event)" />
+      <button id="analyze-btn" onclick="analyzeReport()" disabled>Analyze Report</button>
+    </div>
+
+    <div id="loading" class="card" style="display:none;">
+      <p class="loading">🔎 Reading your report and analyzing it... this can take a few seconds.</p>
+    </div>
+
+    <!-- This whole block is now populated both right after a fresh analysis AND on page
+         load from saved history, using the same renderResults() function either way -
+         this is the fix for "results disappear when I navigate away and come back". -->
+    <div id="results" style="display:none;">
+      <div class="card">
+        <h3>Your Main Result <span class="badge blue">Primary</span></h3>
+        <p id="primary-summary"></p>
+        <button class="listen" onclick="speak(document.getElementById('primary-summary').textContent, getUserLanguage())">🔊 Listen</button>
+        <h4 style="font-size:13px; margin-top:12px;">Diet & Lifestyle Tips</h4>
+        <ul id="primary-tips" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+      </div>
+
+      <div id="other-findings-card" class="card" style="display:none;">
+        <h3>We Also Noticed <span class="badge orange">Extra</span></h3>
+        <div id="other-findings-list"></div>
+      </div>
+
+      <div id="diet-plan-card" class="card" style="display:none;">
+        <h3>🗓️ Your Weekly Diet Plan</h3>
+        <div id="diet-plan-list"></div>
+        <button id="download-pdf-btn" style="margin-top:10px;">📄 Download Diet Plan as PDF</button>
+      </div>
+
+      <div id="medicines-card" class="card" style="display:none;">
+        <h3>💊 Medicines Detected</h3>
+        <p style="font-size:13px;">We've automatically added these to your reminders.</p>
+        <div id="medicines-list"></div>
+      </div>
+
+      <div class="card">
+        <p style="font-size:12px; color:var(--muted);" id="disclaimer-text"></p>
+      </div>
+    </div>
+
+    <!-- Past reports, always visible below the current result (or alone, if none uploaded this session) -->
+    <div id="history-section" style="display:none;">
+      <h3 style="font-size:15px; margin:20px 0 10px;">Previous Reports</h3>
+      <div id="history-list"></div>
+    </div>
+
+    <div id="empty-state" class="card" style="display:none;">
+      <p>No reports uploaded yet. Upload one above to get started.</p>
+    </div>
+  </main>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+<script>
+document.getElementById("lang-label").textContent = getUserLanguage();
+let chosenFiles = [];
+let currentReportId = null;
+
+function onFilesChosen(event) {
+  chosenFiles = Array.from(event.target.files);
+  if (!chosenFiles.length) return;
+
+  const previewList = document.getElementById("preview-list");
+  previewList.innerHTML = "";
+
+  chosenFiles.forEach(f => {
+    if (f.type === "application/pdf") {
+      const chip = document.createElement("div");
+      chip.style.cssText = "background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12px;";
+      chip.textContent = "📄 " + f.name;
+      previewList.appendChild(chip);
+    } else {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(f);
+      img.style.cssText = "width:70px; height:70px; object-fit:cover; border-radius:10px;";
+      previewList.appendChild(img);
+    }
+  });
+
+  document.getElementById("drop-label").textContent = `✅ ${chosenFiles.length} file(s) selected — tap to change`;
+  document.getElementById("analyze-btn").disabled = false;
+}
+
+async function analyzeReport() {
+  if (!chosenFiles.length) return;
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("results").style.display = "none";
+
+  const formData = new FormData();
+  chosenFiles.forEach(f => formData.append("files", f));
+  formData.append("language", getUserLanguage());
+  if (getUserId()) formData.append("user_id", getUserId());
+
+  try {
+    const result = await apiPost("/reports/analyze", formData, true);
+    if (result.files_failed && result.files_failed.length) {
+      alert(`Note: couldn't read ${result.files_failed.length} file(s): ${result.files_failed.join(", ")}. The rest were analyzed successfully.`);
+    }
+    renderResults(result.analysis, result.medicines_detected, result.report_id);
+    // Refresh history so the new report shows up in the list below too
+    loadHistory();
+  } catch (e) {
+    alert("Could not analyze report: " + e.message);
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+function renderResults(analysis, medicines, reportId) {
+  currentReportId = reportId;
+  document.getElementById("results").style.display = "block";
+
+  document.getElementById("primary-summary").textContent = analysis.primary_finding?.summary || "";
+  const tipsList = document.getElementById("primary-tips");
+  tipsList.innerHTML = "";
+  (analysis.primary_finding?.diet_tips || []).forEach(tip => {
+    const li = document.createElement("li");
+    li.textContent = tip;
+    tipsList.appendChild(li);
+  });
+
+  const otherFindings = analysis.other_findings || [];
+  const otherCard = document.getElementById("other-findings-card");
+  if (otherFindings.length) {
+    otherCard.style.display = "block";
+    const container = document.getElementById("other-findings-list");
+    container.innerHTML = "";
+    otherFindings.forEach(f => {
+      const div = document.createElement("div");
+      div.style.marginBottom = "12px";
+      div.innerHTML = `
+        <b style="font-size:14px;">${f.value_name}</b>
+        <p style="font-size:13px; color:var(--muted); margin:4px 0;">${f.summary}</p>
+        <p style="font-size:13px;">🥗 ${(f.food_suggestions || []).join(", ")}</p>
+      `;
+      container.appendChild(div);
+    });
+  } else {
+    otherCard.style.display = "none";
+  }
+
+  const dietPlan = analysis.diet_plan || {};
+  const dietCard = document.getElementById("diet-plan-card");
+  if (dietPlan && Object.keys(dietPlan).length) {
+    dietCard.style.display = "block";
+    const container = document.getElementById("diet-plan-list");
+    container.innerHTML = "";
+    Object.entries(dietPlan).forEach(([day, meals]) => {
+      const row = document.createElement("p");
+      row.style.fontSize = "14px";
+      row.style.margin = "6px 0";
+      row.innerHTML = `<b>${day}</b> — Veg: ${meals.veg || "-"} | Non-veg: ${meals.non_veg || "-"}`;
+      container.appendChild(row);
+    });
+
+    const downloadBtn = document.getElementById("download-pdf-btn");
+    if (reportId) {
+      downloadBtn.style.display = "inline-flex";
+      downloadBtn.onclick = () => {
+        window.open(`${API_BASE}/reports/${reportId}/diet-plan-pdf`, "_blank");
+      };
+    } else {
+      downloadBtn.style.display = "none"; // no report_id (e.g. shouldn't happen, but stay safe)
+    }
+  } else {
+    dietCard.style.display = "none";
+  }
+
+  const medicinesCard = document.getElementById("medicines-card");
+  if (medicines && medicines.length) {
+    medicinesCard.style.display = "block";
+    const container = document.getElementById("medicines-list");
+    container.innerHTML = "";
+    medicines.forEach(m => {
+      const div = document.createElement("div");
+      div.style.fontSize = "13px";
+      div.style.marginBottom = "6px";
+      div.textContent = `${m.medicine_name} — ${m.dosage} (${m.frequency})`;
+      container.appendChild(div);
+    });
+  } else {
+    medicinesCard.style.display = "none";
+  }
+
+  document.getElementById("disclaimer-text").textContent = analysis.disclaimer || "Please consult a doctor for medical decisions.";
+}
+
+// ---- Fix for the persistence bug: on every page load, fetch this user's report
+// history from the backend and show at least the most recent one immediately,
+// instead of showing a blank page until a new upload happens. ----
+async function loadHistory() {
+  const userId = getUserId();
+  if (!userId) return;
+
+  try {
+    const reports = await apiGet(`/reports?user_id=${userId}`);
+
+    if (!reports.length) {
+      document.getElementById("empty-state").style.display = "block";
+      document.getElementById("history-section").style.display = "none";
+      return;
+    }
+    document.getElementById("empty-state").style.display = "none";
+
+    // Show the most recent report as the main "results" view, same as right after upload
+    const latest = reports[0];
+    const analysis = {
+      primary_finding: JSON.parse(latest.primary_finding || "{}"),
+      other_findings: JSON.parse(latest.other_findings || "[]"),
+      diet_plan: JSON.parse(latest.diet_plan || "{}"),
+      disclaimer: "Please consult a doctor for medical decisions.",
+    };
+    renderResults(analysis, [], latest.id);
+
+    // Older reports (if any) shown as a compact history list below
+    const older = reports.slice(1);
+    const historySection = document.getElementById("history-section");
+    const historyList = document.getElementById("history-list");
+    historyList.innerHTML = "";
+
+    if (older.length) {
+      historySection.style.display = "block";
+      older.forEach(r => {
+        const primary = JSON.parse(r.primary_finding || "{}");
+        const card = document.createElement("div");
+        card.className = "card";
+        const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : "";
+        card.innerHTML = `
+          <p style="font-size:12px; color:var(--muted); margin:0 0 4px;">${date}</p>
+          <p style="font-size:14px; margin:0;">${primary.summary || "Report processed."}</p>
+        `;
+        historyList.appendChild(card);
+      });
+    } else {
+      historySection.style.display = "none";
+    }
+  } catch (e) {
+    // Backend unreachable - fail quietly here rather than blocking the upload UI above
+    console.error("Could not load report history:", e);
+  }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
