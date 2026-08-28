@@ -46,7 +46,7 @@
       <div class="card">
         <h3>Your Main Result <span class="badge blue">Primary</span></h3>
         <p id="primary-summary"></p>
-        <button class="listen" onclick="speak(document.getElementById('primary-summary').textContent, getUserLanguage())">🔊 Listen</button>
+        <button class="listen" onclick="speak(buildFullReportSpeechText(), getUserLanguage())">🔊 Listen to Full Report</button>
         <h4 style="font-size:13px; margin-top:12px;">Diet & Lifestyle Tips</h4>
         <ul id="primary-tips" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
       </div>
@@ -54,6 +54,11 @@
       <div id="other-findings-card" class="card" style="display:none;">
         <h3>We Also Noticed <span class="badge orange">Extra</span></h3>
         <div id="other-findings-list"></div>
+      </div>
+
+      <div id="normal-findings-card" class="card" style="display:none;">
+        <h3>What Looks Fine <span class="badge green">Good</span></h3>
+        <ul id="normal-findings-list" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
       </div>
 
       <div id="diet-plan-card" class="card" style="display:none;">
@@ -92,6 +97,7 @@
 document.getElementById("lang-label").textContent = getUserLanguage();
 let chosenFiles = [];
 let currentReportId = null;
+let currentAnalysis = null; // kept in memory so the "Listen to Full Report" button can read everything, not just the top summary
 
 function onFilesChosen(event) {
   chosenFiles = Array.from(event.target.files);
@@ -145,6 +151,7 @@ async function analyzeReport() {
 
 function renderResults(analysis, medicines, reportId) {
   currentReportId = reportId;
+  currentAnalysis = analysis;
   document.getElementById("results").style.display = "block";
 
   document.getElementById("primary-summary").textContent = analysis.primary_finding?.summary || "";
@@ -174,6 +181,21 @@ function renderResults(analysis, medicines, reportId) {
     });
   } else {
     otherCard.style.display = "none";
+  }
+
+  const normalFindings = analysis.normal_findings || [];
+  const normalCard = document.getElementById("normal-findings-card");
+  if (normalFindings.length) {
+    normalCard.style.display = "block";
+    const list = document.getElementById("normal-findings-list");
+    list.innerHTML = "";
+    normalFindings.forEach(line => {
+      const li = document.createElement("li");
+      li.textContent = line;
+      list.appendChild(li);
+    });
+  } else {
+    normalCard.style.display = "none";
   }
 
   const dietPlan = analysis.diet_plan || {};
@@ -222,6 +244,44 @@ function renderResults(analysis, medicines, reportId) {
   document.getElementById("disclaimer-text").textContent = analysis.disclaimer || "Please consult a doctor for medical decisions.";
 }
 
+// Builds one long piece of text covering every section (main finding, diet tips, other
+// findings, what's normal, disclaimer) so "Listen" reads the whole report, not just the
+// top summary - this is what was missing before.
+function buildFullReportSpeechText() {
+  if (!currentAnalysis) return "";
+  const parts = [];
+
+  if (currentAnalysis.primary_finding?.summary) {
+    parts.push(currentAnalysis.primary_finding.summary);
+  }
+  const tips = currentAnalysis.primary_finding?.diet_tips || [];
+  if (tips.length) {
+    parts.push("Diet and lifestyle tips: " + tips.join(". "));
+  }
+
+  const otherFindings = currentAnalysis.other_findings || [];
+  if (otherFindings.length) {
+    parts.push("We also noticed the following.");
+    otherFindings.forEach(f => {
+      parts.push(`${f.value_name}. ${f.summary}`);
+      if (f.food_suggestions?.length) {
+        parts.push("Helpful foods: " + f.food_suggestions.join(", "));
+      }
+    });
+  }
+
+  const normalFindings = currentAnalysis.normal_findings || [];
+  if (normalFindings.length) {
+    parts.push("The following came back fine. " + normalFindings.join(". "));
+  }
+
+  if (currentAnalysis.disclaimer) {
+    parts.push(currentAnalysis.disclaimer);
+  }
+
+  return parts.join(". ");
+}
+
 // ---- Fix for the persistence bug: on every page load, fetch this user's report
 // history from the backend and show at least the most recent one immediately,
 // instead of showing a blank page until a new upload happens. ----
@@ -244,6 +304,7 @@ async function loadHistory() {
     const analysis = {
       primary_finding: JSON.parse(latest.primary_finding || "{}"),
       other_findings: JSON.parse(latest.other_findings || "[]"),
+      normal_findings: JSON.parse(latest.normal_findings || "[]"),
       diet_plan: JSON.parse(latest.diet_plan || "{}"),
       disclaimer: "Please consult a doctor for medical decisions.",
     };

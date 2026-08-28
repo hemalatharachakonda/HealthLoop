@@ -107,6 +107,7 @@ class Report(Base):
     raw_text = Column(Text)
     primary_finding = Column(Text)   # JSON stored as text (works identically across SQLite/Postgres/MySQL)
     other_findings = Column(Text)    # JSON stored as text
+    normal_findings = Column(Text)   # JSON stored as text - list of values that came back fine
     diet_tips = Column(Text)         # JSON stored as text
     diet_plan = Column(Text)         # JSON stored as text - day-by-day meal plan (Monday..Sunday)
     language = Column(String(50))
