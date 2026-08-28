@@ -12,3 +12,4 @@ bcrypt
 pypdf
 pdf2image
 fpdf2
+apscheduler

@@ -24,10 +24,13 @@
 
   <main>
     <div class="card">
-      <h3>Add a reminder manually</h3>
-      <input id="med-name" placeholder="Medicine name" />
-      <input id="med-dosage" placeholder="Dosage (e.g. 500mg)" />
-      <input id="med-frequency" placeholder="Frequency (e.g. twice daily)" />
+      <h3>Add a reminder</h3>
+      <p style="font-size:13px; color:var(--muted);">Know the medicine details? Fill them in below. Don't know them, or just want a quick reminder? Skip straight to setting a time — that's all that's required.</p>
+      <input id="med-name" placeholder="Medicine name (optional)" />
+      <input id="med-dosage" placeholder="Dosage, e.g. 500mg (optional)" />
+      <input id="med-frequency" placeholder="Frequency, e.g. twice daily (optional)" />
+      <label style="font-size:13px; color:var(--text); display:block; margin-bottom:4px;">Time to remind you</label>
+      <input id="med-time" type="time" required />
       <button onclick="addReminder()">Add Reminder</button>
     </div>
 
@@ -53,10 +56,13 @@ async function loadReminders() {
   reminders.forEach(r => {
     const card = document.createElement("div");
     card.className = "card";
-    const speakText = `Time to take ${r.medicine_name}, ${r.dosage}, ${r.frequency}`;
+    const title = r.medicine_name || "Reminder";
+    const speakText = `Time to take ${title}${r.dosage ? ", " + r.dosage : ""}${r.frequency ? ", " + r.frequency : ""}`;
+    const details = [r.dosage, r.frequency].filter(Boolean).join(" — ");
     card.innerHTML = `
-      <h3>${r.medicine_name} ${r.taken ? '<span class="badge green">Taken</span>' : '<span class="badge orange">Pending</span>'}</h3>
-      <p>${r.dosage} — ${r.frequency}</p>
+      <h3>${title} ${r.taken ? '<span class="badge green">Taken</span>' : '<span class="badge orange">Pending</span>'}</h3>
+      ${details ? `<p>${details}</p>` : ""}
+      ${r.reminder_time ? `<p>⏰ ${r.reminder_time}</p>` : ""}
       <button class="listen" onclick='speak(${JSON.stringify(speakText)}, getUserLanguage())'>🔊 Listen</button>
       ${!r.taken ? `<button onclick="markTaken(${r.id})">Mark as Taken</button>` : ""}
     `;
@@ -73,12 +79,18 @@ async function addReminder() {
   const medicine_name = document.getElementById("med-name").value.trim();
   const dosage = document.getElementById("med-dosage").value.trim();
   const frequency = document.getElementById("med-frequency").value.trim();
-  if (!medicine_name) return alert("Please enter a medicine name");
+  const reminder_time = document.getElementById("med-time").value;
 
-  await apiPost("/reminders", { user_id: getUserId() ? parseInt(getUserId()) : null, medicine_name, dosage, frequency });
+  if (!reminder_time) return alert("Please set a time for the reminder.");
+
+  await apiPost("/reminders", {
+    user_id: getUserId() ? parseInt(getUserId()) : null,
+    medicine_name, dosage, frequency, reminder_time,
+  });
   document.getElementById("med-name").value = "";
   document.getElementById("med-dosage").value = "";
   document.getElementById("med-frequency").value = "";
+  document.getElementById("med-time").value = "";
   loadReminders();
 }
 

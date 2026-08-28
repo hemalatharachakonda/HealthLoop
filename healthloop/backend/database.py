@@ -28,22 +28,53 @@ from pathlib import Path
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 )
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).parent
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/healthloop.db")
+
+# Two ways to configure the database connection:
+#
+# 1. DATABASE_URL - a full connection string. If your password has special
+#    characters (@, #, %, etc.), you must percent-encode them yourself, which
+#    is easy to get wrong (e.g. "%40" not "%%40" - the doubling only applies
+#    inside .bat script files, never at an interactive Command Prompt or in a
+#    plain .env file).
+#
+# 2. DB_USER / DB_PASSWORD / DB_HOST / DB_PORT / DB_NAME / DB_DRIVER - set
+#    these instead, and the URL is built safely below using SQLAlchemy's own
+#    URL.create(), which handles special characters in the password
+#    automatically. This is the recommended, foolproof option - use this one
+#    if you've had trouble with DATABASE_URL directly.
+_raw_database_url = os.getenv("DATABASE_URL")
+
+if _raw_database_url:
+    DATABASE_URL = _raw_database_url
+elif os.getenv("DB_USER"):
+    DATABASE_URL = URL.create(
+        drivername=os.getenv("DB_DRIVER", "postgresql"),
+        username=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD", ""),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=os.getenv("DB_NAME", "healthloop"),
+    )
+else:
+    DATABASE_URL = f"sqlite:///{BASE_DIR}/healthloop.db"
 
 # Connection args differ by database type:
 # - SQLite needs this for use with FastAPI's threaded requests.
 # - MySQL (e.g. Aiven, PlanetScale) commonly requires SSL - PyMySQL needs this
 #   passed as a dict here, NOT as a "?ssl=true" query param in the URL (that
 #   syntax silently breaks PyMySQL's connection args parsing).
-if DATABASE_URL.startswith("sqlite"):
+_drivername = DATABASE_URL.drivername if hasattr(DATABASE_URL, "drivername") else str(DATABASE_URL)
+
+if _drivername.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
-elif DATABASE_URL.startswith("mysql"):
+elif _drivername.startswith("mysql"):
     connect_args = {"ssl": {"ssl": {}}}
 else:
     connect_args = {}
@@ -88,9 +119,11 @@ class Reminder(Base):
     __tablename__ = "reminders"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    medicine_name = Column(String(255))
-    dosage = Column(String(255))
-    frequency = Column(String(255))
+    medicine_name = Column(String(255), nullable=True)   # optional - user can skip straight to just a time
+    dosage = Column(String(255), nullable=True)           # optional
+    frequency = Column(String(255), nullable=True)         # optional
+    reminder_time = Column(String(5), nullable=True)        # "HH:MM" 24-hour format
+    last_emailed_date = Column(String(10), nullable=True)    # "YYYY-MM-DD" - prevents re-sending same day
     taken = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

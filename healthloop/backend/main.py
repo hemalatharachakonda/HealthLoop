@@ -27,6 +27,7 @@ from groq_client import (
     mental_health_reply,
 )
 from hospital_finder import find_hospitals
+from reminder_scheduler import start_scheduler
 
 app = FastAPI(title="HealthLoop API")
 
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 init_db()
+start_scheduler()
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 if FRONTEND_DIR.exists():
@@ -297,6 +299,7 @@ def list_reminders(user_id: int | None = None, db: Session = Depends(get_db)):
             "medicine_name": r.medicine_name,
             "dosage": r.dosage,
             "frequency": r.frequency,
+            "reminder_time": r.reminder_time,
             "taken": r.taken,
         }
         for r in reminders
@@ -315,18 +318,20 @@ def mark_taken(reminder_id: int, db: Session = Depends(get_db)):
 
 class ReminderIn(BaseModel):
     user_id: int | None = None
-    medicine_name: str
+    medicine_name: str = ""    # optional - user can skip straight to just setting a time
     dosage: str = ""
     frequency: str = ""
+    reminder_time: str | None = None   # "HH:MM" 24-hour format, e.g. "08:00"
 
 
 @app.post("/api/reminders")
 def create_reminder(reminder: ReminderIn, db: Session = Depends(get_db)):
     db_reminder = Reminder(
         user_id=reminder.user_id,
-        medicine_name=reminder.medicine_name,
-        dosage=reminder.dosage,
-        frequency=reminder.frequency,
+        medicine_name=reminder.medicine_name or None,
+        dosage=reminder.dosage or None,
+        frequency=reminder.frequency or None,
+        reminder_time=reminder.reminder_time,
     )
     db.add(db_reminder)
     db.commit()
