@@ -92,6 +92,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     phone = Column(String(20), nullable=True)
     parent_phone = Column(String(20), nullable=True)
+    parent_email = Column(String(255), nullable=True)
     age = Column(Integer, nullable=True)
     language = Column(String(50), default="English")
     created_at = Column(DateTime, default=datetime.utcnow)

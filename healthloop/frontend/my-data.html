@@ -59,6 +59,7 @@ async function loadMyData() {
       <p><b>Email:</b> ${data.profile.email}</p>
       <p><b>Phone:</b> ${data.profile.phone || "Not provided"}</p>
       <p><b>Parent/Guardian phone:</b> ${data.profile.parent_phone || "Not provided"}</p>
+      <p><b>Parent/Guardian email:</b> ${data.profile.parent_email || "Not provided"}</p>
       <p><b>Age:</b> ${data.profile.age || "Not provided"}</p>
       <p><b>Language:</b> ${data.profile.language}</p>
       <p><b>Account created:</b> ${data.profile.created_at ? new Date(data.profile.created_at).toLocaleDateString() : "-"}</p>

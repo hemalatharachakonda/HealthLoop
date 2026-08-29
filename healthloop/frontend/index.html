@@ -50,6 +50,7 @@
           <input id="signup-password" type="password" placeholder="Password" />
           <input id="signup-phone" type="tel" placeholder="Your mobile number" />
           <input id="signup-parent-phone" type="tel" placeholder="Parent / guardian mobile number (optional)" />
+          <input id="signup-parent-email" type="email" placeholder="Parent / guardian email (optional, used only if we ever need to reach them about you)" />
           <input id="signup-age" type="number" placeholder="Age" />
           <select id="signup-lang">
             <option value="English">English</option>
@@ -144,6 +145,7 @@ async function doSignup() {
   const password = document.getElementById("signup-password").value;
   const phone = document.getElementById("signup-phone").value.trim();
   const parent_phone = document.getElementById("signup-parent-phone").value.trim();
+  const parent_email = document.getElementById("signup-parent-email").value.trim();
   const age = document.getElementById("signup-age").value;
   const language = document.getElementById("signup-lang").value;
 
@@ -155,6 +157,7 @@ async function doSignup() {
       name, email, password,
       phone: phone || null,
       parent_phone: parent_phone || null,
+      parent_email: parent_email || null,
       age: age ? parseInt(age) : null,
       language,
     });

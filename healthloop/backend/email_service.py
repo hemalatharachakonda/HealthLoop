@@ -55,3 +55,45 @@ def send_reminder_email(to_email: str, patient_name: str, medicine_name: str, do
     except Exception as e:
         print(f"[email_service] Failed to send reminder email to {to_email}: {e}")
         return False
+
+
+def send_parent_notification_email(to_email: str, student_name: str, language: str = "English") -> bool:
+    """
+    Sent only when a student in a mental-health check-in shows signs of real risk
+    AND explicitly consents to a parent/guardian being notified - this is never
+    triggered silently or without the student's knowledge (see mental-health.html's
+    consent flow). Deliberately calm and non-alarmist in tone, and does not repeat
+    what the student said - it invites the parent to reach out and talk, not
+    frighten them with detail we can't respond to.
+    """
+    if not EMAIL_ADDRESS or not EMAIL_APP_PASSWORD:
+        print("[email_service] EMAIL_ADDRESS / EMAIL_APP_PASSWORD not configured - skipping parent notification email.")
+        return False
+
+    subject = f"A gentle note about {student_name} from HealthLoop"
+    body = (
+        f"Hello,\n\n"
+        f"This is a message from HealthLoop, a wellbeing check-in app that {student_name} has been using.\n\n"
+        f"During a recent check-in, {student_name} shared something that suggested they could use some extra "
+        f"support right now, and they asked us to let you know.\n\n"
+        f"We'd gently encourage you to check in with them soon - a simple, caring conversation can mean a lot. "
+        f"If it feels urgent, please don't hesitate to reach out to a counselor or a mental health professional as well.\n\n"
+        f"This message was sent only with {student_name}'s knowledge and consent.\n\n"
+        f"Warmly,\nHealthLoop"
+    )
+
+    msg = MIMEMultipart()
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(EMAIL_ADDRESS, EMAIL_APP_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"[email_service] Failed to send parent notification email to {to_email}: {e}")
+        return False

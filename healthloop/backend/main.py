@@ -28,6 +28,7 @@ from groq_client import (
 )
 from hospital_finder import find_hospitals
 from reminder_scheduler import start_scheduler
+from email_service import send_parent_notification_email
 
 app = FastAPI(title="HealthLoop API")
 
@@ -56,6 +57,7 @@ class SignupIn(BaseModel):
     password: str
     phone: str | None = None
     parent_phone: str | None = None
+    parent_email: str | None = None
     age: int | None = None
     language: str = "English"
 
@@ -72,6 +74,7 @@ def signup(payload: SignupIn, db: Session = Depends(get_db)):
         password_hash=hash_password(payload.password),
         phone=payload.phone,
         parent_phone=payload.parent_phone,
+        parent_email=payload.parent_email,
         age=payload.age,
         language=payload.language,
     )
@@ -114,6 +117,7 @@ def get_user_full_data(user_id: int, db: Session = Depends(get_db)):
             "email": user.email,
             "phone": user.phone,
             "parent_phone": user.parent_phone,
+            "parent_email": user.parent_email,
             "age": user.age,
             "language": user.language,
             "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -148,7 +152,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "User not found")
     return {
         "id": user.id, "name": user.name, "email": user.email,
-        "phone": user.phone, "parent_phone": user.parent_phone,
+        "phone": user.phone, "parent_phone": user.parent_phone, "parent_email": user.parent_email,
         "age": user.age, "language": user.language,
     }
 
@@ -429,6 +433,32 @@ def mental_health_endpoint(payload: MentalHealthIn, db: Session = Depends(get_db
     db.commit()
 
     return result
+
+
+class NotifyParentIn(BaseModel):
+    user_id: int
+
+
+@app.post("/api/mental-health/notify-parent")
+def notify_parent(payload: NotifyParentIn, db: Session = Depends(get_db)):
+    """
+    Called only after the student explicitly consents in the crisis-alert UI
+    (see mental-health.html's "Yes, please notify someone" button) - never
+    triggered automatically or without the student seeing it happen.
+    """
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if not user.parent_email:
+        return {"sent": False, "reason": "No parent/guardian email is on file for this account."}
+
+    sent = send_parent_notification_email(
+        to_email=user.parent_email,
+        student_name=user.name,
+        language=user.language or "English",
+    )
+    return {"sent": sent, "reason": None if sent else "Email could not be sent - check server logs."}
 
 
 @app.get("/api/health")

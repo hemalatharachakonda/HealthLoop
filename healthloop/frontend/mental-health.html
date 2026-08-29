@@ -93,12 +93,26 @@ async function sendMessage() {
   }
 }
 
-function consentToNotify(consented) {
+async function consentToNotify(consented) {
   document.getElementById("crisis-alert").style.display = "none";
   if (consented) {
-    // Hackathon scope: in a real build this would trigger a backend call
-    // to notify a registered trusted contact / counselor.
-    alert("A counselor/trusted contact would be notified here (backend hook to wire up).");
+    const userId = getUserId();
+    if (!userId) {
+      addBubble("assistant", "I couldn't identify your account to notify anyone - please make sure you're logged in.");
+    } else {
+      try {
+        const result = await apiPost("/mental-health/notify-parent", { user_id: parseInt(userId) });
+        if (result.sent) {
+          addBubble("assistant", "I've reached out to your parent/guardian. Thank you for trusting me with this.");
+        } else {
+          addBubble("assistant", result.reason && result.reason.includes("No parent")
+            ? "I don't have a parent/guardian email on file for you, so I couldn't send a message. You can add one in your profile, or reach out to someone you trust directly."
+            : "I wasn't able to send that message right now, but please still consider reaching out to someone you trust.");
+        }
+      } catch (e) {
+        addBubble("assistant", "I wasn't able to send that message right now, but please still consider reaching out to someone you trust.");
+      }
+    }
   }
   addBubble("assistant", "I'm here whenever you want to keep talking.");
 }
