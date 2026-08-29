@@ -9,26 +9,26 @@
 <body>
 <div class="app-shell">
   <nav class="side-nav">
-    <div class="brand">🩺</div>
-    <a href="index.html"><span class="icon">🏠</span><span>Home</span></a>
-    <a href="upload.html" class="active"><span class="icon">📷</span><span>Reports</span></a>
-    <a href="reminders.html"><span class="icon">💊</span><span>Meds</span></a>
-    <a href="triage.html"><span class="icon">🩹</span><span>Care</span></a>
-    <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
-    <a href="my-data.html"><span class="icon">🔒</span><span>My Data</span></a>
-    <a href="#" onclick="logout(); return false;"><span class="icon">🚪</span><span>Log Out</span></a>
+    <div class="brand">H</div>
+    <a href="index.html"><span>Home</span></a>
+    <a href="upload.html" class="active"><span>Reports</span></a>
+    <a href="reminders.html"><span>Meds</span></a>
+    <a href="triage.html"><span>Care</span></a>
+    <a href="mental-health.html"><span>Talk</span></a>
+    <a href="my-data.html"><span>My Data</span></a>
+    <a href="#" onclick="logout(); return false;"><span>Log Out</span></a>
   </nav>
 
   <div class="content-area">
   <header class="topbar">
-    <h1>📷 Upload Report</h1>
+    <h1>Upload Report</h1>
   </header>
 
   <main>
     <div class="card">
       <p>Take photos of your medical report or prescription, or upload a PDF. You can add multiple pages. We'll explain it in <b id="lang-label"></b>.</p>
       <div class="upload-drop" onclick="document.getElementById('file-input').click()">
-        <div id="drop-label">📁 Tap to choose photos or a PDF (multiple allowed)</div>
+        <div id="drop-label">Tap to choose photos or a PDF (multiple allowed)</div>
         <div id="preview-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
       </div>
       <input type="file" id="file-input" accept="image/*,application/pdf" multiple style="display:none;" onchange="onFilesChosen(event)" />
@@ -36,7 +36,7 @@
     </div>
 
     <div id="loading" class="card" style="display:none;">
-      <p class="loading">🔎 Reading your report and analyzing it... this can take a few seconds.</p>
+      <p class="loading">Reading your report and analyzing it... this can take a few seconds.</p>
     </div>
 
     <!-- This whole block is now populated both right after a fresh analysis AND on page
@@ -46,9 +46,41 @@
       <div class="card">
         <h3>Your Main Result <span class="badge blue">Primary</span></h3>
         <p id="primary-summary"></p>
-        <button class="listen" onclick="speak(buildFullReportSpeechText(), getUserLanguage())">🔊 Listen to Full Report</button>
+
+        <div id="symptoms-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">What You May Notice</h4>
+          <ul id="symptoms-list" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+        </div>
+
+        <div id="cause-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">Why This Happens</h4>
+          <p id="cause-text" style="font-size:14px; color:var(--muted); margin:4px 0;"></p>
+        </div>
+
+        <div id="effects-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">If Left Unaddressed</h4>
+          <p id="effects-text" style="font-size:14px; color:var(--muted); margin:4px 0;"></p>
+        </div>
+
+        <div id="reduce-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">How To Reduce It</h4>
+          <ul id="reduce-list" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+        </div>
+
         <h4 style="font-size:13px; margin-top:12px;">Diet & Lifestyle Tips</h4>
         <ul id="primary-tips" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+
+        <div id="activity-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">Exercise & Relaxation</h4>
+          <ul id="activity-list" style="font-size:14px; color:var(--muted); padding-left:18px;"></ul>
+        </div>
+
+        <div id="doctor-block" style="display:none; margin-top:12px;">
+          <h4 style="font-size:13px;">When To See A Doctor</h4>
+          <p id="doctor-text" style="font-size:14px; color:var(--muted); margin:4px 0;"></p>
+        </div>
+
+        <button class="listen" onclick="toggleSpeak(this, buildFullReportSpeechText(), getUserLanguage())">Listen to Full Report</button>
       </div>
 
       <div id="other-findings-card" class="card" style="display:none;">
@@ -62,13 +94,13 @@
       </div>
 
       <div id="diet-plan-card" class="card" style="display:none;">
-        <h3>🗓️ Your Weekly Diet Plan</h3>
+        <h3>Your Weekly Diet Plan</h3>
         <div id="diet-plan-list"></div>
-        <button id="download-pdf-btn" style="margin-top:10px;">📄 Download Diet Plan as PDF</button>
+        <button id="download-pdf-btn" style="margin-top:10px;">Download Diet Plan as PDF</button>
       </div>
 
       <div id="medicines-card" class="card" style="display:none;">
-        <h3>💊 Medicines Detected</h3>
+        <h3>Medicines Detected</h3>
         <p style="font-size:13px;">We've automatically added these to your reminders.</p>
         <div id="medicines-list"></div>
       </div>
@@ -110,7 +142,7 @@ function onFilesChosen(event) {
     if (f.type === "application/pdf") {
       const chip = document.createElement("div");
       chip.style.cssText = "background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12px;";
-      chip.textContent = "📄 " + f.name;
+      chip.textContent = f.name;
       previewList.appendChild(chip);
     } else {
       const img = document.createElement("img");
@@ -120,7 +152,7 @@ function onFilesChosen(event) {
     }
   });
 
-  document.getElementById("drop-label").textContent = `✅ ${chosenFiles.length} file(s) selected — tap to change`;
+  document.getElementById("drop-label").textContent = `${chosenFiles.length} file(s) selected — tap to change`;
   document.getElementById("analyze-btn").disabled = false;
 }
 
@@ -155,6 +187,47 @@ function renderResults(analysis, medicines, reportId) {
   document.getElementById("results").style.display = "block";
 
   document.getElementById("primary-summary").textContent = analysis.primary_finding?.summary || "";
+
+  const symptoms = analysis.primary_finding?.symptoms_to_watch || [];
+  const symptomsBlock = document.getElementById("symptoms-block");
+  if (symptoms.length) {
+    symptomsBlock.style.display = "block";
+    const list = document.getElementById("symptoms-list");
+    list.innerHTML = "";
+    symptoms.forEach(s => { const li = document.createElement("li"); li.textContent = s; list.appendChild(li); });
+  } else {
+    symptomsBlock.style.display = "none";
+  }
+
+  const cause = analysis.primary_finding?.cause || "";
+  const causeBlock = document.getElementById("cause-block");
+  if (cause) {
+    causeBlock.style.display = "block";
+    document.getElementById("cause-text").textContent = cause;
+  } else {
+    causeBlock.style.display = "none";
+  }
+
+  const effects = analysis.primary_finding?.effects_if_untreated || "";
+  const effectsBlock = document.getElementById("effects-block");
+  if (effects) {
+    effectsBlock.style.display = "block";
+    document.getElementById("effects-text").textContent = effects;
+  } else {
+    effectsBlock.style.display = "none";
+  }
+
+  const reduceTips = analysis.primary_finding?.how_to_reduce || [];
+  const reduceBlock = document.getElementById("reduce-block");
+  if (reduceTips.length) {
+    reduceBlock.style.display = "block";
+    const list = document.getElementById("reduce-list");
+    list.innerHTML = "";
+    reduceTips.forEach(t => { const li = document.createElement("li"); li.textContent = t; list.appendChild(li); });
+  } else {
+    reduceBlock.style.display = "none";
+  }
+
   const tipsList = document.getElementById("primary-tips");
   tipsList.innerHTML = "";
   (analysis.primary_finding?.diet_tips || []).forEach(tip => {
@@ -162,6 +235,26 @@ function renderResults(analysis, medicines, reportId) {
     li.textContent = tip;
     tipsList.appendChild(li);
   });
+
+  const activities = analysis.primary_finding?.activity_recommendations || [];
+  const activityBlock = document.getElementById("activity-block");
+  if (activities.length) {
+    activityBlock.style.display = "block";
+    const list = document.getElementById("activity-list");
+    list.innerHTML = "";
+    activities.forEach(a => { const li = document.createElement("li"); li.textContent = a; list.appendChild(li); });
+  } else {
+    activityBlock.style.display = "none";
+  }
+
+  const whenToSeeDoctor = analysis.primary_finding?.when_to_see_a_doctor || "";
+  const doctorBlock = document.getElementById("doctor-block");
+  if (whenToSeeDoctor) {
+    doctorBlock.style.display = "block";
+    document.getElementById("doctor-text").textContent = whenToSeeDoctor;
+  } else {
+    doctorBlock.style.display = "none";
+  }
 
   const otherFindings = analysis.other_findings || [];
   const otherCard = document.getElementById("other-findings-card");
@@ -175,7 +268,8 @@ function renderResults(analysis, medicines, reportId) {
       div.innerHTML = `
         <b style="font-size:14px;">${f.value_name}</b>
         <p style="font-size:13px; color:var(--muted); margin:4px 0;">${f.summary}</p>
-        <p style="font-size:13px;">🥗 ${(f.food_suggestions || []).join(", ")}</p>
+        <p style="font-size:13px;">Helpful foods: ${(f.food_suggestions || []).join(", ")}</p>
+        ${f.when_to_see_a_doctor ? `<p style="font-size:13px; margin-top:4px;"><b>When to see a doctor:</b> ${f.when_to_see_a_doctor}</p>` : ""}
       `;
       container.appendChild(div);
     });
@@ -254,9 +348,30 @@ function buildFullReportSpeechText() {
   if (currentAnalysis.primary_finding?.summary) {
     parts.push(currentAnalysis.primary_finding.summary);
   }
+  const symptoms = currentAnalysis.primary_finding?.symptoms_to_watch || [];
+  if (symptoms.length) {
+    parts.push("What you may notice: " + symptoms.join(". "));
+  }
+  if (currentAnalysis.primary_finding?.cause) {
+    parts.push("Why this happens: " + currentAnalysis.primary_finding.cause);
+  }
+  if (currentAnalysis.primary_finding?.effects_if_untreated) {
+    parts.push("If left unaddressed: " + currentAnalysis.primary_finding.effects_if_untreated);
+  }
+  const reduceTips = currentAnalysis.primary_finding?.how_to_reduce || [];
+  if (reduceTips.length) {
+    parts.push("How to reduce it: " + reduceTips.join(". "));
+  }
   const tips = currentAnalysis.primary_finding?.diet_tips || [];
   if (tips.length) {
     parts.push("Diet and lifestyle tips: " + tips.join(". "));
+  }
+  const activities = currentAnalysis.primary_finding?.activity_recommendations || [];
+  if (activities.length) {
+    parts.push("Exercise and relaxation: " + activities.join(". "));
+  }
+  if (currentAnalysis.primary_finding?.when_to_see_a_doctor) {
+    parts.push("When to see a doctor: " + currentAnalysis.primary_finding.when_to_see_a_doctor);
   }
 
   const otherFindings = currentAnalysis.other_findings || [];
@@ -266,6 +381,9 @@ function buildFullReportSpeechText() {
       parts.push(`${f.value_name}. ${f.summary}`);
       if (f.food_suggestions?.length) {
         parts.push("Helpful foods: " + f.food_suggestions.join(", "));
+      }
+      if (f.when_to_see_a_doctor) {
+        parts.push("When to see a doctor: " + f.when_to_see_a_doctor);
       }
     });
   }

@@ -264,10 +264,13 @@ def download_diet_plan_pdf(report_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Report not found")
 
     diet_plan = json.loads(report.diet_plan or "{}")
-    if not diet_plan:
-        raise HTTPException(400, "No diet plan available for this report.")
-
     primary = json.loads(report.primary_finding or "{}")
+    other_findings = json.loads(report.other_findings or "[]")
+    normal_findings = json.loads(report.normal_findings or "[]")
+
+    if not diet_plan and not other_findings and not normal_findings and not primary:
+        raise HTTPException(400, "No report data available to build a PDF from.")
+
     patient_name = "Patient"
     if report.user_id:
         user = db.query(User).filter(User.id == report.user_id).first()
@@ -276,7 +279,9 @@ def download_diet_plan_pdf(report_id: int, db: Session = Depends(get_db)):
 
     pdf_bytes = build_diet_plan_pdf(
         patient_name=patient_name,
-        primary_summary=primary.get("summary", ""),
+        primary_finding=primary,
+        other_findings=other_findings,
+        normal_findings=normal_findings,
         diet_plan=diet_plan,
         language=report.language or "English",
     )

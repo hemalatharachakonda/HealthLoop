@@ -29,7 +29,7 @@ def send_reminder_email(to_email: str, patient_name: str, medicine_name: str, do
         print("[email_service] EMAIL_ADDRESS / EMAIL_APP_PASSWORD not configured - skipping email.")
         return False
 
-    subject = f"💊 Medicine Reminder - {medicine_name or 'Time to take your medicine'}"
+    subject = f"Medicine Reminder - {medicine_name or 'Time to take your medicine'}"
     body_lines = [f"Hi {patient_name},", "", "This is your HealthLoop medicine reminder."]
     if medicine_name:
         body_lines.append(f"Medicine: {medicine_name}")

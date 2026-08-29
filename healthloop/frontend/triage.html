@@ -14,18 +14,18 @@
 <body>
 <div class="app-shell">
   <nav class="side-nav">
-    <div class="brand">🩺</div>
-    <a href="index.html"><span class="icon">🏠</span><span>Home</span></a>
-    <a href="upload.html"><span class="icon">📷</span><span>Reports</span></a>
-    <a href="reminders.html"><span class="icon">💊</span><span>Meds</span></a>
-    <a href="triage.html" class="active"><span class="icon">🩹</span><span>Care</span></a>
-    <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
-    <a href="my-data.html"><span class="icon">🔒</span><span>My Data</span></a>
-    <a href="#" onclick="logout(); return false;"><span class="icon">🚪</span><span>Log Out</span></a>
+    <div class="brand">H</div>
+    <a href="index.html"><span>Home</span></a>
+    <a href="upload.html"><span>Reports</span></a>
+    <a href="reminders.html"><span>Meds</span></a>
+    <a href="triage.html" class="active"><span>Care</span></a>
+    <a href="mental-health.html"><span>Talk</span></a>
+    <a href="my-data.html"><span>My Data</span></a>
+    <a href="#" onclick="logout(); return false;"><span>Log Out</span></a>
   </nav>
 
   <div class="content-area">
-  <header class="topbar"><h1>🩹 Not Feeling Well?</h1></header>
+  <header class="topbar"><h1>Not Feeling Well?</h1></header>
 
   <main>
     <div class="card">
@@ -43,12 +43,12 @@
       <h3>Suggested Specialty</h3>
       <p id="specialty-text" style="font-weight:600; color:var(--primary); font-size:16px;"></p>
       <p id="reasoning-text"></p>
-      <button class="listen" onclick="speak(document.getElementById('reasoning-text').textContent, getUserLanguage())">🔊 Listen</button>
-      <button onclick="findNearbyHospitals()" style="margin-top:10px;">📍 Find Nearby Hospitals</button>
+      <button class="listen" onclick="toggleSpeak(this, document.getElementById('reasoning-text').textContent, getUserLanguage())">Listen</button>
+      <button onclick="findNearbyHospitals()" style="margin-top:10px;">Find Nearby Hospitals</button>
     </div>
 
     <div id="hospitals-loading" class="card" style="display:none;">
-      <p class="loading">📍 Finding hospitals near you...</p>
+      <p class="loading">Finding hospitals near you...</p>
     </div>
 
     <div id="hospital-map" style="display:none;"></div>
@@ -103,7 +103,7 @@ async function sendAnswer() {
       recommendedSpecialty = result.recommended_specialty || "";
       isEmergency = recommendedSpecialty.toLowerCase().includes("emergency");
       if (isEmergency) {
-        addBubble("assistant", "⚠️ This sounds urgent. Please consider calling emergency services right away.");
+        addBubble("assistant", "This sounds urgent. Please consider calling emergency services right away.");
       }
     } else {
       addBubble("assistant", result.next_question);
@@ -176,12 +176,12 @@ function renderHospitals(result) {
     card.id = `hospital-card-${i}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lon}`;
     const specialtyBadge = h.specialty_match
-      ? `<span class="badge blue">✓ Confirmed specialty match</span>`
+      ? `<span class="badge blue">Confirmed specialty match</span>`
       : "";
     card.innerHTML = `
       <h3>${h.name} <span class="badge ${result.mode === 'emergency' ? 'orange' : 'green'}">${h.status}</span></h3>
       ${specialtyBadge}
-      <p>${h.phone ? "📞 " + h.phone : "Phone number not listed"}</p>
+      <p>${h.phone ? h.phone : "Phone number not listed"}</p>
       <a class="btn" style="display:inline-block; text-decoration:none;" href="${mapsUrl}" target="_blank">Get Directions</a>
     `;
     card.style.cursor = "pointer";

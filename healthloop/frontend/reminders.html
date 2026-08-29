@@ -9,18 +9,18 @@
 <body>
 <div class="app-shell">
   <nav class="side-nav">
-    <div class="brand">🩺</div>
-    <a href="index.html"><span class="icon">🏠</span><span>Home</span></a>
-    <a href="upload.html"><span class="icon">📷</span><span>Reports</span></a>
-    <a href="reminders.html" class="active"><span class="icon">💊</span><span>Meds</span></a>
-    <a href="triage.html"><span class="icon">🩹</span><span>Care</span></a>
-    <a href="mental-health.html"><span class="icon">💬</span><span>Talk</span></a>
-    <a href="my-data.html"><span class="icon">🔒</span><span>My Data</span></a>
-    <a href="#" onclick="logout(); return false;"><span class="icon">🚪</span><span>Log Out</span></a>
+    <div class="brand">H</div>
+    <a href="index.html"><span>Home</span></a>
+    <a href="upload.html"><span>Reports</span></a>
+    <a href="reminders.html" class="active"><span>Meds</span></a>
+    <a href="triage.html"><span>Care</span></a>
+    <a href="mental-health.html"><span>Talk</span></a>
+    <a href="my-data.html"><span>My Data</span></a>
+    <a href="#" onclick="logout(); return false;"><span>Log Out</span></a>
   </nav>
 
   <div class="content-area">
-  <header class="topbar"><h1>💊 Medicine Reminders</h1></header>
+  <header class="topbar"><h1>Medicine Reminders</h1></header>
 
   <main>
     <div class="card">
@@ -63,7 +63,7 @@ async function loadReminders() {
       <h3>${title} ${r.taken ? '<span class="badge green">Taken</span>' : '<span class="badge orange">Pending</span>'}</h3>
       ${details ? `<p>${details}</p>` : ""}
       ${r.reminder_time ? `<p>⏰ ${r.reminder_time}</p>` : ""}
-      <button class="listen" onclick='speak(${JSON.stringify(speakText)}, getUserLanguage())'>🔊 Listen</button>
+      <button class="listen" onclick='toggleSpeak(this, ${JSON.stringify(speakText)}, getUserLanguage())'>Listen</button>
       ${!r.taken ? `<button onclick="markTaken(${r.id})">Mark as Taken</button>` : ""}
     `;
     container.appendChild(card);

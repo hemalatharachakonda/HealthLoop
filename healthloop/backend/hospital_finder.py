@@ -162,7 +162,14 @@ def find_hospitals(lat: float, lon: float, is_emergency: bool, radius_m: int = 5
     """
     curated_results = _match_curated_hospitals(lat, lon, specialty, is_emergency, radius_m)
 
-    raw_places = _fetch_raw_places(lat, lon, radius_m)
+    # OSM/Overpass is a free, best-effort supplement to the curated list - if it fails
+    # (network issue, Overpass rate limit, timeout), that should never wipe out curated
+    # results that already succeeded. Fail soft here, not hard.
+    try:
+        raw_places = _fetch_raw_places(lat, lon, radius_m)
+    except Exception:
+        raw_places = []
+
     osm_results = []
     curated_names = {h["name"].lower() for h in curated_results}
 

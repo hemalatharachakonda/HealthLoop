@@ -35,11 +35,43 @@ function speak(text, language) {
     alert("Voice playback isn't supported in this browser.");
     return;
   }
-  window.speechSynthesis.cancel(); // stop any current speech
+  window.speechSynthesis.cancel(); // stop any current speech before starting new speech
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = LANG_CODES[language] || "en-IN";
   utterance.rate = 0.95;
   window.speechSynthesis.speak(utterance);
+}
+
+// Stops any speech currently playing, without starting new speech - this is the
+// missing piece: speak() only ever starts (or restarts) speech, there was no
+// separate way to just stop it.
+function stopSpeaking() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+// Toggles a button between "Listen" and "Stop" so one button does both jobs -
+// pass the button element itself (e.g. via `this` in an inline onclick) along with
+// the text/language to speak.
+function toggleSpeak(button, text, language) {
+  if (!("speechSynthesis" in window)) {
+    alert("Voice playback isn't supported in this browser.");
+    return;
+  }
+  if (window.speechSynthesis.speaking) {
+    stopSpeaking();
+    button.textContent = "Listen";
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = LANG_CODES[language] || "en-IN";
+  utterance.rate = 0.95;
+  utterance.onend = () => { button.textContent = "Listen"; };
+  utterance.onerror = () => { button.textContent = "Listen"; };
+  window.speechSynthesis.speak(utterance);
+  button.textContent = "Stop";
 }
 
 // ---- Fetch helper ----
