@@ -9,18 +9,28 @@ Note: like the reminder feature itself, this only runs while the backend
 process is alive. On Render's free tier, if the service spins down from
 inactivity, scheduled reminders won't fire until a request wakes it back up -
 a real limitation worth knowing, not something this code can fix on a free tier.
+
+IMPORTANT - timezone: reminder_time is entered by users as their local India
+time (e.g. "15:17"), but cloud hosts like Render run their servers in UTC, not
+IST. Comparing against datetime.now() would use the SERVER's timezone, which
+silently never matches what the user typed - the reminder just never fires,
+with no error anywhere, since nothing actually failed. IST is forced explicitly
+here so this works the same locally (where the machine happens to already be on
+IST) and in the cloud (where it very likely isn't).
 """
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from database import SessionLocal, Reminder, User
 from email_service import send_reminder_email
 
+IST = ZoneInfo("Asia/Kolkata")
 scheduler = BackgroundScheduler()
 
 
 def _check_and_send_reminders():
-    now = datetime.now()
+    now = datetime.now(IST)
     current_time = now.strftime("%H:%M")
     today = now.strftime("%Y-%m-%d")
 
