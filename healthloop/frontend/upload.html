@@ -171,6 +171,9 @@ async function analyzeReport() {
     if (result.files_failed && result.files_failed.length) {
       alert(`Note: couldn't read ${result.files_failed.length} file(s): ${result.files_failed.join(", ")}. The rest were analyzed successfully.`);
     }
+    if (result.was_truncated) {
+      alert("This report was quite long, so only the first portion was analyzed. If something important was cut off, try uploading it as separate smaller sections.");
+    }
     renderResults(result.analysis, result.medicines_detected, result.report_id);
     // Refresh history so the new report shows up in the list below too
     loadHistory();

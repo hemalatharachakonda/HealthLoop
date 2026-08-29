@@ -191,6 +191,16 @@ async def analyze_report_endpoint(
             "For PDFs, make sure it's a text-based PDF, not a scanned image with no text layer.",
         )
 
+    # Safety cap: some PDFs (multi-page directories, long forms, etc.) extract far more text
+    # than a normal 1-2 page lab report ever would. Without a cap, a large enough file makes
+    # the request body itself too big for Groq's API to accept (a 413 error, distinct from
+    # the 429 rate-limit case handled in groq_client.py) - this truncates before that point
+    # is ever reached, rather than failing the whole upload.
+    MAX_REPORT_CHARS = 12000
+    was_truncated = len(raw_text) > MAX_REPORT_CHARS
+    if was_truncated:
+        raw_text = raw_text[:MAX_REPORT_CHARS]
+
     try:
         analysis = analyze_report(raw_text, language=language)
     except Exception as e:
@@ -232,6 +242,7 @@ async def analyze_report_endpoint(
         "raw_text_preview": raw_text[:300],
         "files_processed": len(combined_text_parts),
         "files_failed": failed_files,
+        "was_truncated": was_truncated,
     }
 
 
