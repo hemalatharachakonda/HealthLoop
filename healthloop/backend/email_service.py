@@ -1,28 +1,40 @@
 """
 Sends reminder and parent-notification emails.
 
-Two delivery paths, tried in this order:
+Three delivery paths, tried in this order:
 
-1. Resend (HTTP API, port 443) - used automatically whenever RESEND_API_KEY is set.
-   This is the one that actually works when deployed on Render's free tier: Render
-   blocks outbound SMTP connections (ports 587/465/25) as a standard anti-abuse
-   measure, which is why Gmail SMTP below fails there with "Network is unreachable" -
-   that error is Render's firewall, not a credentials or code problem. Resend sends
-   over plain HTTPS instead, which isn't blocked.
-   Get a free key at https://resend.com (no card required). IMPORTANT limitation on
-   Resend's free/unverified tier: without verifying your own domain, you can only
-   send FROM their shared address (onboarding@resend.dev) TO the email address you
-   signed up to Resend with - fine for a hackathon demo where you're emailing
-   yourself as the test patient, but it will silently fail for other recipients
-   until you verify a domain in the Resend dashboard.
+1. Brevo (HTTP API, port 443) - used automatically whenever BREVO_API_KEY is set.
+   THIS IS THE RECOMMENDED OPTION for sending to real patients/multiple test
+   accounts: unlike Resend below, Brevo only requires verifying a single SENDER
+   EMAIL ADDRESS (a quick email-link click, no domain/DNS setup needed) - once
+   that's done, you can send to ANY recipient. Free tier: 300 emails/day.
+   Get a free key at https://app.brevo.com (Settings -> SMTP & API -> API Keys),
+   then verify a sender under Settings -> Senders & IP -> Senders (use any email
+   you can receive mail at - your own Gmail is fine).
    Set in backend/.env (locally) and in Render's Environment tab (deployed):
+     BREVO_API_KEY=xkeysib-your_key_here
+     BREVO_SENDER_EMAIL=the_email_you_verified_in_brevo@example.com
+
+2. Resend (HTTP API, port 443) - used automatically whenever RESEND_API_KEY is set
+   AND Brevo isn't configured. Get a free key at https://resend.com (no card
+   required). IMPORTANT limitation on Resend's free/unverified tier: without
+   verifying a whole DOMAIN (not just an email - real DNS setup), you can only
+   send TO the email address you signed up to Resend with, no other recipients -
+   this is why reminders worked for your own account but silently failed (403)
+   for every other test account. Brevo above avoids this restriction.
+   Set in backend/.env:
      RESEND_API_KEY=re_your_key_here
 
-2. Gmail SMTP - used as a fallback when RESEND_API_KEY isn't set. Works fine for
-   local development (your own laptop's network isn't blocked), which is why this
-   worked in local testing earlier. Requires a Gmail "app password", not your real
-   password - set up at https://myaccount.google.com/apppasswords (needs 2FA
-   enabled first).
+Both HTTP options above exist because Render's free tier blocks outbound SMTP
+connections (ports 587/465/25) as a standard anti-abuse measure - that's why
+Gmail SMTP below fails on Render with "Network is unreachable", even with
+correct credentials. That error is Render's firewall, not a code problem.
+
+3. Gmail SMTP - used as a last-resort fallback when neither BREVO_API_KEY nor
+   RESEND_API_KEY is set. Works fine for local development (your own laptop's
+   network isn't blocked the way Render's is). Requires a Gmail "app password",
+   not your real password - set up at https://myaccount.google.com/apppasswords
+   (needs 2FA enabled first).
    Set in backend/.env:
      EMAIL_ADDRESS=youraddress@gmail.com
      EMAIL_APP_PASSWORD=your_16_char_app_password
@@ -35,6 +47,10 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
 load_dotenv()
+
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL", "")
+BREVO_SENDER_NAME = os.getenv("BREVO_SENDER_NAME", "HealthLoop")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM = os.getenv("RESEND_FROM", "HealthLoop <onboarding@resend.dev>")
@@ -49,6 +65,36 @@ def _send_email(to_email: str, subject: str, body: str, log_label: str) -> bool:
     """Shared sender used by both reminder and parent-notification emails.
     Returns True if sent successfully, False otherwise (never raises - a failed
     email should not crash whatever background job or request called this)."""
+
+    if BREVO_API_KEY:
+        if not BREVO_SENDER_EMAIL:
+            print(f"[email_service] BREVO_API_KEY is set but BREVO_SENDER_EMAIL is missing - "
+                  f"skipping {log_label} email. Set BREVO_SENDER_EMAIL to the address you verified in Brevo.")
+            return False
+        try:
+            response = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "api-key": BREVO_API_KEY,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={
+                    "sender": {"email": BREVO_SENDER_EMAIL, "name": BREVO_SENDER_NAME},
+                    "to": [{"email": to_email}],
+                    "subject": subject,
+                    "textContent": body,
+                },
+                timeout=10,
+            )
+            if response.status_code in (200, 201):
+                return True
+            print(f"[email_service] Brevo failed to send {log_label} to {to_email}: "
+                  f"{response.status_code} {response.text}")
+            return False
+        except Exception as e:
+            print(f"[email_service] Brevo request failed for {log_label} to {to_email}: {e}")
+            return False
 
     if RESEND_API_KEY:
         try:
