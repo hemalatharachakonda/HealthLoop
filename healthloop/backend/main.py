@@ -196,7 +196,8 @@ async def analyze_report_endpoint(
     # the request body itself too big for Groq's API to accept (a 413 error, distinct from
     # the 429 rate-limit case handled in groq_client.py) - this truncates before that point
     # is ever reached, rather than failing the whole upload.
-    MAX_REPORT_CHARS = 12000
+    # (Lowered from 12000 - that was still triggering 413s on larger multi-page PDFs.)
+    MAX_REPORT_CHARS = 6000
     was_truncated = len(raw_text) > MAX_REPORT_CHARS
     if was_truncated:
         raw_text = raw_text[:MAX_REPORT_CHARS]

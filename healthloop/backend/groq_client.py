@@ -48,6 +48,17 @@ def _call_groq(messages, temperature=0.4, force_json=False, max_tokens=None):
             "it's not an app bug)." + wait_msg
         )
 
+    if resp.status_code == 413:
+        # The extracted report text (plus system prompt) was too large for Groq's API to
+        # accept in one request. main.py already caps raw_text length before this is ever
+        # called - if this still fires, the cap itself needs to be lowered further.
+        raise RuntimeError(
+            "This report has too much text for the AI to process in one go. Try uploading "
+            "just the page(s) with the actual test results, rather than the whole document "
+            "(cover letters, hospital letterheads, and multi-page directories add a lot of "
+            "extra text without adding useful information)."
+        )
+
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
