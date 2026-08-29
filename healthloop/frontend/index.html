@@ -187,7 +187,9 @@ async function loadDashboard() {
     const reminders = await apiGet(`/reminders?user_id=${userId}`);
     const pending = reminders.filter(r => !r.taken);
     document.getElementById("next-medicine").textContent = pending.length
-      ? `${pending[0].medicine_name} — ${pending[0].dosage} (${pending[0].frequency})`
+      ? [pending[0].medicine_name, pending[0].dosage, pending[0].frequency].filter(Boolean).length
+        ? `${pending[0].medicine_name || "Medicine"} — ${pending[0].dosage || "dosage not set"} (${pending[0].frequency || "frequency not set"}) at ${pending[0].reminder_time}`
+        : `Reminder set for ${pending[0].reminder_time}`
       : "No pending reminders. All caught up!";
   } catch (e) { /* backend may not be reachable yet */ }
 
