@@ -14,6 +14,28 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was retired by Groq on Aug 16, 2026 - this is Groq's recommended replacement
 
 
+def translate_text(text: str, target_language: str) -> str:
+    """
+    Translates plain text (used for emails, which otherwise stay hardcoded in
+    English regardless of the user's selected language - unlike the in-app AI
+    features, which already correctly respond in the user's language directly).
+    Falls back to the original English text if translation fails for any reason
+    (missing API key, network issue, etc) rather than blocking the email entirely.
+    """
+    if target_language == "English":
+        return text
+    try:
+        messages = [
+            {"role": "system", "content": f"Translate the following text into {target_language}. "
+                                           f"Respond with ONLY the translation, no notes, no preamble, "
+                                           f"preserving line breaks."},
+            {"role": "user", "content": text},
+        ]
+        return _call_groq(messages, temperature=0.2)
+    except Exception:
+        return text
+
+
 def _call_groq(messages, temperature=0.4, force_json=False, max_tokens=None):
     if not GROQ_API_KEY:
         raise RuntimeError(

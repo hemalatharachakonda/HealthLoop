@@ -16,8 +16,10 @@ from pathlib import Path
 import json
 import io
 import requests
+import random
+from datetime import datetime, timedelta
 
-from database import init_db, get_db, User, Report, Reminder, MentalHealthSession
+from database import init_db, get_db, User, Report, Reminder, MentalHealthSession, PasswordResetOTP
 from ocr import extract_text_from_file
 from auth import hash_password, verify_password
 from pdf_service import build_diet_plan_pdf
@@ -28,7 +30,7 @@ from groq_client import (
 )
 from hospital_finder import find_hospitals
 from reminder_scheduler import start_scheduler
-from email_service import send_parent_notification_email
+from email_service import send_parent_notification_email, send_otp_email
 
 app = FastAPI(title="HealthLoop API")
 
@@ -95,6 +97,64 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Incorrect email or password.")
     return {"user_id": user.id, "name": user.name, "language": user.language}
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    # Always return the same success-shaped response whether or not the email
+    # exists, so this endpoint can't be used to check which emails are registered.
+    if not user:
+        return {"message": "If an account exists with that email, a code has been sent."}
+
+    otp_code = f"{random.randint(0, 999999):06d}"
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    db.add(PasswordResetOTP(email=payload.email, otp_code=otp_code, expires_at=expires_at))
+    db.commit()
+
+    send_otp_email(to_email=payload.email, otp_code=otp_code, language=user.language or "English")
+    return {"message": "If an account exists with that email, a code has been sent."}
+
+
+class ResetPasswordIn(BaseModel):
+    email: str
+    otp_code: str
+    new_password: str
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
+    if len(payload.new_password) < 6:
+        raise HTTPException(400, "Password should be at least 6 characters.")
+
+    otp_entry = (
+        db.query(PasswordResetOTP)
+        .filter(PasswordResetOTP.email == payload.email)
+        .filter(PasswordResetOTP.otp_code == payload.otp_code)
+        .filter(PasswordResetOTP.used == False)  # noqa: E712
+        .order_by(PasswordResetOTP.created_at.desc())
+        .first()
+    )
+
+    if not otp_entry:
+        raise HTTPException(400, "Invalid or already-used code.")
+    if otp_entry.expires_at < datetime.utcnow():
+        raise HTTPException(400, "This code has expired. Please request a new one.")
+
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(404, "User not found.")
+
+    user.password_hash = hash_password(payload.new_password)
+    otp_entry.used = True
+    db.commit()
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
 
 
 # ---------- View own profile + data (used by a "My Data" screen) ----------

@@ -71,6 +71,7 @@ def _check_and_send_reminders():
                 medicine_name=reminder.medicine_name,
                 dosage=reminder.dosage,
                 frequency=reminder.frequency,
+                language=user.language or "English",
             )
             if sent:
                 reminder.last_emailed_date = today
