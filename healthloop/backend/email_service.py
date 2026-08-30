@@ -46,8 +46,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
-from groq_client import translate_text
-
 load_dotenv()
 
 BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
@@ -145,7 +143,7 @@ def _send_email(to_email: str, subject: str, body: str, log_label: str) -> bool:
         return False
 
 
-def send_reminder_email(to_email: str, patient_name: str, medicine_name: str, dosage: str, frequency: str, language: str = "English") -> bool:
+def send_reminder_email(to_email: str, patient_name: str, medicine_name: str, dosage: str, frequency: str) -> bool:
     subject = f"Medicine Reminder - {medicine_name or 'Time to take your medicine'}"
     body_lines = [f"Hi {patient_name},", "", "This is your HealthLoop medicine reminder."]
     if medicine_name:
@@ -156,9 +154,6 @@ def send_reminder_email(to_email: str, patient_name: str, medicine_name: str, do
         body_lines.append(f"Frequency: {frequency}")
     body_lines += ["", "Stay healthy!", "- HealthLoop"]
     body = "\n".join(body_lines)
-
-    subject = translate_text(subject, language)
-    body = translate_text(body, language)
 
     return _send_email(to_email, subject, body, log_label="reminder")
 
@@ -184,28 +179,4 @@ def send_parent_notification_email(to_email: str, student_name: str, language: s
         f"Warmly,\nHealthLoop"
     )
 
-    # Note: this uses the STUDENT's selected language as a best-effort default,
-    # since there's no separate language preference stored for the parent/guardian.
-    # If the parent's actual preferred language differs, this may not match -
-    # a known limitation given the current data model.
-    subject = translate_text(subject, language)
-    body = translate_text(body, language)
-
     return _send_email(to_email, subject, body, log_label="parent notification")
-
-
-def send_otp_email(to_email: str, otp_code: str, language: str = "English") -> bool:
-    """Sends a 6-digit one-time password for the forgot-password flow. Valid for
-    10 minutes (enforced in main.py, not here) - this function only sends it."""
-    subject = "Your HealthLoop password reset code"
-    body = (
-        f"Hello,\n\n"
-        f"Your one-time code to reset your HealthLoop password is:\n\n"
-        f"    {otp_code}\n\n"
-        f"This code expires in 10 minutes. If you didn't request a password reset, "
-        f"you can safely ignore this email.\n\n"
-        f"- HealthLoop"
-    )
-    subject = translate_text(subject, language)
-    body = translate_text(body, language)
-    return _send_email(to_email, subject, body, log_label="password reset OTP")

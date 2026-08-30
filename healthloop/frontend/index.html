@@ -42,28 +42,6 @@
           <p style="font-size:13px; margin-top:10px;">
             New here? <a href="#" onclick="showSignup(); return false;">Create an account</a>
           </p>
-          <p style="font-size:13px; margin-top:6px;">
-            <a href="#" onclick="showForgotPassword(); return false;">Forgot password?</a>
-          </p>
-        </div>
-
-        <div id="forgot-password-request-form" style="display:none;">
-          <p style="font-size:13px; color:var(--muted);">Enter your account email and we'll send you a one-time code to reset your password.</p>
-          <input id="forgot-email" type="email" placeholder="Email" />
-          <button onclick="doForgotPassword()">Send Reset Code</button>
-          <p style="font-size:13px; margin-top:10px;">
-            <a href="#" onclick="showLogin(); return false;">Back to Log In</a>
-          </p>
-        </div>
-
-        <div id="reset-password-form" style="display:none;">
-          <p style="font-size:13px; color:var(--muted);">Enter the 6-digit code we emailed you, along with your new password.</p>
-          <input id="reset-otp" placeholder="6-digit code" maxlength="6" />
-          <input id="reset-new-password" type="password" placeholder="New password" />
-          <button onclick="doResetPassword()">Reset Password</button>
-          <p style="font-size:13px; margin-top:10px;">
-            <a href="#" onclick="showLogin(); return false;">Back to Log In</a>
-          </p>
         </div>
 
         <div id="signup-form" style="display:none;">
@@ -129,62 +107,14 @@
 function showLogin() {
   document.getElementById("login-form").style.display = "block";
   document.getElementById("signup-form").style.display = "none";
-  document.getElementById("forgot-password-request-form").style.display = "none";
-  document.getElementById("reset-password-form").style.display = "none";
   document.getElementById("auth-title").textContent = "Welcome back";
   hideAuthError();
 }
 function showSignup() {
   document.getElementById("login-form").style.display = "none";
   document.getElementById("signup-form").style.display = "block";
-  document.getElementById("forgot-password-request-form").style.display = "none";
-  document.getElementById("reset-password-form").style.display = "none";
   document.getElementById("auth-title").textContent = "Create your account";
   hideAuthError();
-}
-function showForgotPassword() {
-  document.getElementById("login-form").style.display = "none";
-  document.getElementById("signup-form").style.display = "none";
-  document.getElementById("forgot-password-request-form").style.display = "block";
-  document.getElementById("reset-password-form").style.display = "none";
-  document.getElementById("auth-title").textContent = "Reset your password";
-  hideAuthError();
-}
-
-let pendingResetEmail = null;
-
-async function doForgotPassword() {
-  const email = document.getElementById("forgot-email").value.trim();
-  if (!email) return showAuthError("Please enter your email.");
-
-  try {
-    await apiPost("/auth/forgot-password", { email });
-    pendingResetEmail = email;
-    document.getElementById("forgot-password-request-form").style.display = "none";
-    document.getElementById("reset-password-form").style.display = "block";
-    document.getElementById("auth-title").textContent = "Enter your code";
-    hideAuthError();
-  } catch (e) {
-    showAuthError(e.message);
-  }
-}
-
-async function doResetPassword() {
-  const otp_code = document.getElementById("reset-otp").value.trim();
-  const new_password = document.getElementById("reset-new-password").value;
-  if (!pendingResetEmail) return showAuthError("Please request a reset code first.");
-  if (!otp_code || !new_password) return showAuthError("Please enter the code and your new password.");
-  if (new_password.length < 6) return showAuthError("Password should be at least 6 characters.");
-
-  try {
-    await apiPost("/auth/reset-password", { email: pendingResetEmail, otp_code, new_password });
-    pendingResetEmail = null;
-    showLogin();
-    document.getElementById("login-email").value = "";
-    alert("Password reset successfully. Please log in with your new password.");
-  } catch (e) {
-    showAuthError(e.message);
-  }
 }
 function showAuthError(msg) {
   const el = document.getElementById("auth-error");
